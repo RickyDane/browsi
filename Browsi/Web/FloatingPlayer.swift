@@ -159,6 +159,11 @@ final class FloatingPlayer {
                   style: v.getAttribute('style'), err: document.documentElement.dataset.browsiPopoverError}) })()
             """, contentWorld: .defaultClient)
             debugLog("extract diag: \(String(describing: diag))")
+            if let content = self.panel?.contentView, let host = content.subviews.last {
+                let top = NSPoint(x: content.bounds.midX, y: content.bounds.maxY - 3)
+                let hit = self.panel?.contentView?.superview?.hitTest(content.convert(top, to: content.superview))
+                debugLog("controls frame=\(NSStringFromRect(host.frame)) content=\(NSStringFromRect(content.bounds)) topHit=\(hit.map { String(describing: type(of: $0)) } ?? "nil")")
+            }
         }
         #endif
         self.tab = tab
@@ -264,8 +269,12 @@ final class FloatingPlayer {
         let controls = NSHostingView(rootView: FloatingControls(player: self))
         controls.frame = content.bounds
         controls.autoresizingMask = [.width, .height]
+        controls.safeAreaRegions = []   // cover the (hidden) title bar strip too
         content.addSubview(controls)
         panel.contentView = content
+        // Hide the transparent title bar so it doesn't swallow clicks/hover over the top controls.
+        panel.titlebarSeparatorStyle = .none
+        panel.standardWindowButton(.closeButton)?.superview?.superview?.isHidden = true
         return panel
     }
 }
@@ -312,6 +321,7 @@ private struct FloatingControls: View {
                 .transition(.opacity)
             }
         }
+        .ignoresSafeArea()
         .onHover { h in withAnimation(.easeOut(duration: 0.18)) { hovering = h } }
     }
 
