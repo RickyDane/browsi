@@ -133,7 +133,7 @@ extension TabWebController: WKNavigationDelegate {
         }
 
         if let url = action.request.url, let scheme = url.scheme?.lowercased(),
-           !["http", "https", "about", "data", "blob", "file", "javascript"].contains(scheme) {
+           !["http", "https", "about", "data", "blob", "file", "javascript", "webkit-extension"].contains(scheme) {
             NSWorkspace.shared.open(url)   // mailto:, facetime:, app links…
             return (.cancel, preferences)
         }

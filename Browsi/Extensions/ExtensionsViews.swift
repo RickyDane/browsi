@@ -127,6 +127,35 @@ struct ExtensionsPane: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
 
+            Section {
+                let found = manager.safariExtensions
+                if found.isEmpty {
+                    Text("No Safari web extensions found in your Applications folders.").foregroundStyle(.secondary)
+                }
+                ForEach(found) { info in
+                    let record = manager.record(forSafariExtension: info.path)
+                    HStack(spacing: 10) {
+                        Image(systemName: "safari.fill").frame(width: 22).foregroundStyle(.blue.gradient)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(info.name)
+                            Text("from \(info.appName)").font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        if record?.enabled == true {
+                            Label("On", systemImage: "checkmark").font(.caption).foregroundStyle(.green)
+                        } else {
+                            Button("Turn On") { enableSafari(info.path) }.disabled(busy != nil)
+                        }
+                    }
+                }
+                Button("Rescan") { manager.refreshSafariExtensions() }.buttonStyle(.borderless)
+            } header: {
+                Text("Safari Extensions on This Mac")
+            } footer: {
+                Text("Safari web extensions installed with their apps (for example from the Mac App Store) can run in Browsi. Features that talk to the extension’s own Mac app (native messaging) aren’t available. Safari content blockers and legacy Safari app extensions can only run in Safari.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
             Section("Installed") {
                 if manager.records.isEmpty {
                     Text("No extensions yet.").foregroundStyle(.secondary)
@@ -173,6 +202,17 @@ struct ExtensionsPane: View {
         }
     }
 
+    private func enableSafari(_ path: String) {
+        error = nil
+        busy = "Turning on…"
+        Task {
+            defer { busy = nil }
+            do { try await manager.installSafariExtension(at: path) }
+            catch let e as ExtensionInstallError where e == .cancelled {}
+            catch { self.error = error.localizedDescription }
+        }
+    }
+
     private func pickFile() {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
@@ -208,9 +248,13 @@ private struct InstalledRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(ext?.displayName ?? (record.enabled ? "Loading…" : "Turned off")).font(.system(size: 13, weight: .medium))
+                    if record.appexPath != nil {
+                        Text("Safari").font(.system(size: 9, weight: .semibold)).padding(.horizontal, 5).padding(.vertical, 1)
+                            .background(.blue.opacity(0.18), in: .capsule).foregroundStyle(.blue)
+                    }
                     if let v = ext?.displayVersion { Text(v).font(.caption).foregroundStyle(.tertiary) }
                 }
-                if let err = manager.loadErrors[record.id] {
+                if let err = manager.loadErrors[record.id] ?? context?.errors.first?.localizedDescription {
                     Text(err).font(.caption).foregroundStyle(.red).lineLimit(2)
                 } else if let desc = ext?.displayShortName ?? ext?.displayDescription {
                     Text(desc).font(.caption).foregroundStyle(.secondary).lineLimit(1)

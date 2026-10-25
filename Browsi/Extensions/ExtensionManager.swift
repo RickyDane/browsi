@@ -8,6 +8,8 @@ nonisolated struct InstalledExtension: Codable, Identifiable, Equatable, Sendabl
     var enabled: Bool
     var storeID: String?        // Chrome Web Store ID, if installed from there
     var installed: Date
+    /// Set for Safari web extensions: path of the .appex inside an installed app (not copied).
+    var appexPath: String? = nil
 }
 
 nonisolated enum ExtensionInstallError: LocalizedError, Equatable {
@@ -53,6 +55,67 @@ nonisolated enum ExtensionPackage {
             URLQueryItem(name: "x", value: "id=\(storeID)&installsource=ondemand&uc"),
         ]
         return c.url!
+    }
+
+    static let compatScript = "browsi-compat.js"
+
+    static let workerWrapper = "browsi-background.js"
+
+    /// Rewrites the manifest so `browsi-compat.js` runs before the background script (Chrome API shims).
+    /// Service workers keep running as workers: a wrapper entry loads the shim, then the original worker.
+    /// Returns the patched manifest and, for workers, the wrapper's source.
+    static func patchManifest(_ manifest: [String: Any]) -> (manifest: [String: Any], wrapper: String?)? {
+        guard var background = manifest["background"] as? [String: Any] else { return nil }
+        var wrapper: String?
+        if let worker = background["service_worker"] as? String {
+            guard worker != workerWrapper else { return nil }
+            let path = worker.hasPrefix("/") ? String(worker.dropFirst()) : worker
+            if (background["type"] as? String) == "module" {
+                wrapper = "import './\(compatScript)';\nimport '/\(path)';\n"
+            } else {
+                wrapper = "importScripts('/\(compatScript)', '/\(path)');\n"
+            }
+            background["service_worker"] = workerWrapper
+        } else if let scripts = background["scripts"] as? [String] {
+            guard !scripts.contains(compatScript) else { return nil }
+            background["scripts"] = [compatScript] + scripts
+        } else {
+            return nil
+        }
+        var m = manifest
+        m["background"] = background
+        return (m, wrapper)
+    }
+
+    /// Unpacks a ZIP into `folder` (ditto) and installs the compatibility shim.
+    static func unpack(zip: URL, to folder: URL) throws {
+        try? FileManager.default.removeItem(at: folder)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+        p.arguments = ["-x", "-k", zip.path(percentEncoded: false), folder.path(percentEncoded: false)]
+        try p.run()
+        p.waitUntilExit()
+        guard p.terminationStatus == 0 else { throw ExtensionInstallError.invalid("couldn’t unpack the package") }
+        try applyCompat(in: folder)
+    }
+
+    static func applyCompat(in folder: URL) throws {
+        let manifestURL = folder.appending(path: "manifest.json")
+        guard let data = try? Data(contentsOf: manifestURL),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw ExtensionInstallError.notAnExtension
+        }
+        guard let patched = patchManifest(json),
+              let shim = Bundle.main.url(forResource: "browsi-compat", withExtension: "js") else { return }
+        let dest = folder.appending(path: compatScript)
+        try? FileManager.default.removeItem(at: dest)
+        try FileManager.default.copyItem(at: shim, to: dest)
+        if let wrapper = patched.wrapper {
+            try Data(wrapper.utf8).write(to: folder.appending(path: workerWrapper), options: .atomic)
+        }
+        try JSONSerialization.data(withJSONObject: patched.manifest, options: [.prettyPrinted, .withoutEscapingSlashes])
+            .write(to: manifestURL, options: .atomic)
     }
 
     /// CRX (v2/v3) → the ZIP inside it. A plain ZIP is returned unchanged.
@@ -144,6 +207,7 @@ final class ExtensionManager: NSObject {
         self.browser = browser
         controller.didOpenWindow(window)
         controller.didFocusWindow(window)
+        refreshSafariExtensions()
         Task { for r in records where r.enabled { await load(r) } }
     }
 
@@ -154,8 +218,10 @@ final class ExtensionManager: NSObject {
     @discardableResult
     func load(_ record: InstalledExtension) async -> Bool {
         guard contexts[record.id] == nil else { return true }
+        let record = migrateIfNeeded(record)
         do {
-            let ext = try await WKWebExtension(resourceBaseURL: url(of: record))
+            let ext = if let appex = record.appexPath { try await Self.safariExtension(at: appex) }
+                      else { try await WKWebExtension(resourceBaseURL: url(of: record)) }
             let context = WKWebExtensionContext(for: ext)
             context.uniqueIdentifier = record.id.uuidString
             context.isInspectable = Preferences.shared.webInspectorEnabled
@@ -173,6 +239,88 @@ final class ExtensionManager: NSObject {
             debugLog("extension load failed: \(error)")
             return false
         }
+    }
+
+    /// Older installs were stored as ZIPs without the Chrome compatibility shim: unpack + patch them once.
+    private func migrateIfNeeded(_ record: InstalledExtension) -> InstalledExtension {
+        guard record.appexPath == nil, record.fileName.hasSuffix(".zip"),
+              let i = records.firstIndex(where: { $0.id == record.id }) else { return record }
+        let zip = url(of: record)
+        let folderName = record.id.uuidString
+        do {
+            try ExtensionPackage.unpack(zip: zip, to: Self.directory.appending(path: folderName, directoryHint: .isDirectory))
+            try? FileManager.default.removeItem(at: zip)
+            records[i].fileName = folderName
+            save()
+            return records[i]
+        } catch {
+            debugLog("extension migration failed: \(error)")
+            return record
+        }
+    }
+
+    // MARK: Safari web extensions
+
+    nonisolated struct SafariExtensionInfo: Identifiable, Equatable, Sendable {
+        var path: String
+        var name: String
+        var appName: String
+        var id: String { path }
+    }
+
+    /// Safari web extensions (.appex with `com.apple.Safari.web-extension`) inside installed apps.
+    nonisolated static func discoverSafariExtensions(in roots: [URL] = [
+        URL(fileURLWithPath: "/Applications"),
+        FileManager.default.homeDirectoryForCurrentUser.appending(path: "Applications"),
+    ]) -> [SafariExtensionInfo] {
+        let fm = FileManager.default
+        var out: [SafariExtensionInfo] = []
+        for root in roots {
+            guard let apps = try? fm.contentsOfDirectory(at: root, includingPropertiesForKeys: nil) else { continue }
+            for app in apps where app.pathExtension == "app" {
+                let plugins = app.appending(path: "Contents/PlugIns")
+                guard let appexes = try? fm.contentsOfDirectory(at: plugins, includingPropertiesForKeys: nil) else { continue }
+                for appex in appexes where appex.pathExtension == "appex" {
+                    guard let info = NSDictionary(contentsOf: appex.appending(path: "Contents/Info.plist")) as? [String: Any],
+                          let ext = info["NSExtension"] as? [String: Any],
+                          ext["NSExtensionPointIdentifier"] as? String == "com.apple.Safari.web-extension" else { continue }
+                    let name = info["CFBundleDisplayName"] as? String ?? info["CFBundleName"] as? String
+                        ?? appex.deletingPathExtension().lastPathComponent
+                    out.append(SafariExtensionInfo(path: appex.path(percentEncoded: false), name: name,
+                                                   appName: app.deletingPathExtension().lastPathComponent))
+                }
+            }
+        }
+        return out.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    static func safariExtension(at path: String) async throws -> WKWebExtension {
+        guard let bundle = Bundle(path: path) else { throw ExtensionInstallError.notAnExtension }
+        return try await WKWebExtension(appExtensionBundle: bundle)
+    }
+
+    private(set) var safariExtensions: [SafariExtensionInfo] = []
+
+    func refreshSafariExtensions() {
+        Task.detached(priority: .utility) {
+            let found = Self.discoverSafariExtensions()
+            await MainActor.run { self.safariExtensions = found }
+        }
+    }
+
+    func record(forSafariExtension path: String) -> InstalledExtension? {
+        records.first { $0.appexPath == path }
+    }
+
+    /// Turns on a Safari web extension found on this Mac (resources stay inside its app).
+    @discardableResult
+    func installSafariExtension(at path: String) async throws -> InstalledExtension {
+        if let existing = record(forSafariExtension: path) {
+            if !existing.enabled { setEnabled(existing.id, true) }
+            return existing
+        }
+        let id = UUID()
+        return try await finish(id: id, fileName: id.uuidString, storeID: nil, appexPath: path)
     }
 
     func unload(_ id: UUID) {
@@ -221,6 +369,7 @@ final class ExtensionManager: NSObject {
             let id = UUID()
             let dest = Self.directory.appending(path: id.uuidString, directoryHint: .isDirectory)
             try FileManager.default.copyItem(at: url, to: dest)
+            try? ExtensionPackage.applyCompat(in: dest)
             return try await finish(id: id, fileName: id.uuidString, storeID: nil)
         }
         let data = try Data(contentsOf: url)
@@ -229,24 +378,29 @@ final class ExtensionManager: NSObject {
 
     private func register(zipData: Data, storeID: String?) async throws -> InstalledExtension {
         let id = UUID()
-        let fileName = id.uuidString + ".zip"
-        try zipData.write(to: Self.directory.appending(path: fileName), options: .atomic)
-        return try await finish(id: id, fileName: fileName, storeID: storeID)
+        let zip = FileManager.default.temporaryDirectory.appending(path: id.uuidString + ".zip")
+        try zipData.write(to: zip, options: .atomic)
+        defer { try? FileManager.default.removeItem(at: zip) }
+        try ExtensionPackage.unpack(zip: zip, to: Self.directory.appending(path: id.uuidString, directoryHint: .isDirectory))
+        return try await finish(id: id, fileName: id.uuidString, storeID: storeID)
     }
 
-    private func finish(id: UUID, fileName: String, storeID: String?) async throws -> InstalledExtension {
+    private func finish(id: UUID, fileName: String, storeID: String?, appexPath: String? = nil) async throws -> InstalledExtension {
         let location = Self.directory.appending(path: fileName)
         let ext: WKWebExtension
-        do { ext = try await WKWebExtension(resourceBaseURL: location) }
-        catch {
-            try? FileManager.default.removeItem(at: location)
+        do {
+            if let appexPath { ext = try await Self.safariExtension(at: appexPath) }
+            else { ext = try await WKWebExtension(resourceBaseURL: location) }
+        } catch {
+            if appexPath == nil { try? FileManager.default.removeItem(at: location) }
             throw ExtensionInstallError.invalid(error.localizedDescription)
         }
         guard await confirmInstall(ext) else {
-            try? FileManager.default.removeItem(at: location)
+            if appexPath == nil { try? FileManager.default.removeItem(at: location) }
             throw ExtensionInstallError.cancelled
         }
-        let record = InstalledExtension(id: id, fileName: fileName, enabled: true, storeID: storeID, installed: .now)
+        let record = InstalledExtension(id: id, fileName: fileName, enabled: true, storeID: storeID, installed: .now,
+                                        appexPath: appexPath)
         records.append(record)
         save()
         await load(record)
@@ -266,7 +420,7 @@ final class ExtensionManager: NSObject {
     func remove(_ id: UUID) {
         guard let record = records.first(where: { $0.id == id }) else { return }
         unload(id)
-        try? FileManager.default.removeItem(at: url(of: record))
+        if record.appexPath == nil { try? FileManager.default.removeItem(at: url(of: record)) }
         records.removeAll { $0.id == id }
         loadErrors[id] = nil
         save()
