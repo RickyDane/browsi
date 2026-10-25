@@ -7,3 +7,4 @@ CODE_SIGN_IDENTITY = Apple Development
 // Name of the profile as shown in the developer portal / Xcode › Settings › Accounts
 PROVISIONING_PROFILE_SPECIFIER = Browsi Passkeys Development
 CODE_SIGN_ENTITLEMENTS = Browsi/Resources/Browsi-Passkeys.entitlements
+ENABLE_HARDENED_RUNTIME = YES
