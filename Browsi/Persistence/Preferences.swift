@@ -137,7 +137,7 @@ final class Preferences {
         func int(_ k: String, _ def: Int) -> Int { d.object(forKey: k) as? Int ?? def }
         func dbl(_ k: String, _ def: Double) -> Double { d.object(forKey: k) as? Double ?? def }
         func raw<T: RawRepresentable>(_ k: String, _ def: T) -> T where T.RawValue == String {
-            d.string(forKey: k).flatMap(T.init(rawValue:)) ?? def
+            d.string(forKey: k).flatMap { T(rawValue: $0) } ?? def
         }
         func set(_ k: String) -> Set<String> { Set(d.stringArray(forKey: k) ?? []) }
 
@@ -185,7 +185,12 @@ final class Preferences {
 
         downloadFolderBookmark = d.data(forKey: "downloadFolderBookmark")
         askWhereToSave = bool("askWhereToSave", false)
-        revealDownloads = bool("revealDownloads", true)
+        // Downloads no longer open Finder by default (one-time reset of the old default).
+        if !d.bool(forKey: "migrated.revealDownloadsOff") {
+            d.set(false, forKey: "revealDownloads")
+            d.set(true, forKey: "migrated.revealDownloadsOff")
+        }
+        revealDownloads = bool("revealDownloads", false)
         smartRenameDownloads = bool("smartRenameDownloads", true)
 
         userAgentMode = raw("userAgentMode", .safari)

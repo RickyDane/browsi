@@ -280,3 +280,40 @@ struct HeroLayoutTests {
         #expect(store.heroRect.col + store.heroRect.w <= GridLayout.columns)
     }
 }
+
+@MainActor
+struct MouseNavigationTests {
+    @Test func backAndForwardButtonsNavigateSelectedTab() async throws {
+        let browser = BrowserState(library: LibraryStore(inMemory: true), restore: false)
+        let tab = browser.newTab(url: nil)
+        let webView = try #require(tab.controller?.webView)
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 400, height: 300), styleMask: [.titled],
+                              backing: .buffered, defer: false)
+        window.orderFront(nil)
+        defer { window.orderOut(nil) }
+        webView.frame = window.contentView!.bounds
+        window.contentView!.addSubview(webView)
+        func until(_ cond: () -> Bool) async {
+            for _ in 0..<60 where !cond() { try? await Task.sleep(for: .milliseconds(50)) }
+        }
+        let dir = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        for name in ["one", "two"] { try Data("<p>\(name)</p>".utf8).write(to: dir.appending(path: name + ".html")) }
+        webView.loadFileURL(dir.appending(path: "one.html"), allowingReadAccessTo: dir)
+        await until { webView.url?.lastPathComponent == "one.html" && !webView.isLoading }
+        webView.loadFileURL(dir.appending(path: "two.html"), allowingReadAccessTo: dir)
+        await until { webView.url?.lastPathComponent == "two.html" && webView.canGoBack }
+        #expect(browser.navigateHistory(forward: false))
+        await until { webView.url?.lastPathComponent == "one.html" && webView.canGoForward && !webView.isLoading }
+        #expect(webView.url?.lastPathComponent == "one.html")
+        #expect(browser.navigateHistory(forward: true))
+        await until { webView.url?.lastPathComponent == "two.html" }
+        #expect(webView.url?.lastPathComponent == "two.html")
+    }
+
+    @Test func downloadsDontOpenFinderByDefault() {
+        #expect(!Preferences.shared.revealDownloads)
+        #expect(Preferences.shared.smartRenameDownloads)
+    }
+}

@@ -45,7 +45,7 @@ To work in Xcode, run `xcodegen generate` and open `Browsi.xcodeproj`. The proje
 | Close tab / Reopen closed tab | ⌘W (pinned tabs stay pinned, just unloaded) / ⌘⇧T |
 | Toggle sidebar | ⌘S |
 | Bookmark page / Pin tab | ⌘D / ⌘⇧P |
-| Back / Forward / Reload | ⌘[ / ⌘] / ⌘R |
+| Back / Forward / Reload | ⌘[ / ⌘] (or mouse thumb buttons) / ⌘R |
 | Select tab 1–9 / Next–previous tab | ⌘1–9 / ⌃Tab, ⌘⇧] ⌘⇧[ |
 | Select space 1–9 / Next–previous space | ⌃1–9 / ⌘⌥→ ⌘⌥← |
 | New space | ⌘⇧N |

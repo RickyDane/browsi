@@ -93,6 +93,7 @@ final class BrowserState {
         suspender.start()
         MiddleClickCloser.shared.install(browser: self)
         installClickTracker()
+        installNavigationButtons()
         DownloadManager.shared.browser = self
         Task {
             _ = await ContentBlocker.shared.load()
@@ -449,6 +450,33 @@ final class BrowserState {
     }
 
     func recordClick(at point: CGPoint) { lastClick = (point, .now) }
+
+    // MARK: Mouse back/forward buttons
+
+    @ObservationIgnored private var navButtonMonitor: Any?
+
+    /// Thumb buttons (3 = back, 4 = forward) navigate the page under the pointer's context:
+    /// the peek if open, otherwise the selected tab.
+    private func installNavigationButtons() {
+        guard navButtonMonitor == nil else { return }
+        navButtonMonitor = NSEvent.addLocalMonitorForEvents(matching: [.otherMouseDown, .otherMouseUp]) { [weak self] event in
+            let button = event.buttonNumber
+            guard button == 3 || button == 4 else { return event }
+            if event.type == .otherMouseUp {
+                MainActor.assumeIsolated { _ = self?.navigateHistory(forward: button == 4) }
+            }
+            return nil
+        }
+    }
+
+    /// Returns false when there was nowhere to go.
+    @discardableResult
+    func navigateHistory(forward: Bool) -> Bool {
+        guard let webView = peek?.tab.controller?.webView ?? selectedTab?.controller?.webView else { return false }
+        if forward, webView.canGoForward { webView.goForward(); return true }
+        if !forward, webView.canGoBack { webView.goBack(); return true }
+        return false
+    }
 
     func launchDownloadFlight(for fileName: String) {
         noteDownloadActivity()
