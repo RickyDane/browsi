@@ -12,7 +12,6 @@ struct SidebarView: View {
             NavRow()
                 .padding(.top, 6)
             URLBarView()
-            ExtensionToolbar()
 
             Group {
                 VStack(alignment: .leading, spacing: 10) {

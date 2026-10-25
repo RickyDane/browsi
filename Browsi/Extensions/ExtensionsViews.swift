@@ -2,23 +2,35 @@ import SwiftUI
 import UniformTypeIdentifiers
 import WebKit
 
-/// Extension action buttons shown under the address bar.
-struct ExtensionToolbar: View {
+/// Extension buttons as their own section at the trailing end of the address bar.
+/// Shows up to `maxVisible` icons; the rest live in an overflow menu.
+struct ExtensionBarSection: View {
     @Environment(BrowserState.self) private var browser
     @State private var manager = ExtensionManager.shared
+    var maxVisible = 3
 
     var body: some View {
         let ids = manager.records.filter { $0.enabled && manager.contexts[$0.id] != nil }.map(\.id)
         if !ids.isEmpty {
-            ScrollView(.horizontal) {
-                HStack(spacing: 4) {
-                    ForEach(ids, id: \.self) { id in ExtensionActionButton(id: id) }
+            HStack(spacing: 2) {
+                Rectangle().fill(.primary.opacity(0.15)).frame(width: 1, height: 16).padding(.horizontal, 4)
+                ForEach(ids.prefix(maxVisible), id: \.self) { id in ExtensionActionButton(id: id) }
+                if ids.count > maxVisible {
+                    Menu {
+                        ForEach(ids.dropFirst(maxVisible), id: \.self) { id in
+                            Button(manager.displayName(id)) { manager.performAction(id) }
+                        }
+                        Divider()
+                        Button("Manage Extensions…") { SettingsPane.open(.extensions) }
+                    } label: {
+                        Image(systemName: "ellipsis").font(.system(size: 11, weight: .semibold))
+                    }
+                    .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+                    .foregroundStyle(.secondary)
+                    .help("More extensions")
                 }
-                .padding(.horizontal, 2)
             }
-            .scrollIndicators(.never)
-            .frame(height: 30)
-            .transition(.opacity.combined(with: .move(edge: .top)))
+            .transition(.opacity.combined(with: .scale(scale: 0.8, anchor: .trailing)))
         }
     }
 }
@@ -40,17 +52,18 @@ private struct ExtensionActionButton: View {
                     if let icon { Image(nsImage: icon).resizable().interpolation(.high) }
                     else { Image(systemName: "puzzlepiece.extension.fill").foregroundStyle(.secondary) }
                 }
-                .frame(width: 18, height: 18)
+                .frame(width: 15, height: 15)
                 .opacity(action?.isEnabled == false ? 0.4 : 1)
                 if let badge = action?.badgeText, !badge.isEmpty {
                     Text(badge).font(.system(size: 8, weight: .bold)).foregroundStyle(.white)
                         .padding(.horizontal, 3).frame(minWidth: 12, minHeight: 12)
                         .background(browser.selectedSpace.color, in: .capsule)
-                        .offset(x: 7, y: -6)
+                        .offset(x: 6, y: -5)
                 }
             }
         }
         .buttonStyle(SquishButtonStyle())
+        .padding(-4)
         .help(action?.label.isEmpty == false ? action!.label : manager.displayName(id))
         .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) { manager.actionAnchors[id] = $0 }
         .contextMenu {

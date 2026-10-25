@@ -54,6 +54,7 @@ struct URLBarView: View {
                 .buttonStyle(SquishButtonStyle()).padding(-5)
                 .help("Bookmark (⌘D)")
             }
+            ExtensionBarSection()
         }
         .font(.system(size: 11))
         .padding(.horizontal, 12)
