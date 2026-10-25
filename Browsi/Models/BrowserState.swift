@@ -111,6 +111,7 @@ final class BrowserState {
         PasskeyAuthenticator.onNotice = { [weak self] symbol, text in self?.showToast(symbol, text) }
         PasskeyAuthenticator.onCeremony = { [weak self] started in self?.passkeyCeremony(started: started) }
         LoginImpactBridge.shared.browser = self
+        MediaPlaybackBridge.shared.browser = self
         AppleSignInBridge.shared.browser = self
         HomeWebCache.shared.browser = self
         WebConfigFactory.passwordBridge.onOfferSave = { [weak self] offer in

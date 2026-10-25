@@ -21,6 +21,8 @@ final class Tab: Identifiable {
     /// True while a page element (e.g. a video) is in fullscreen: WebKit has moved the web view into
     /// its own fullscreen window and will put it back itself on exit.
     var isInElementFullscreen = false
+    /// True while the page plays audio/video (kept current by `MediaPlaybackBridge`).
+    var isPlayingMedia = false
     var lastActive = Date()
     var zoom: Double = Preferences.shared.defaultZoom
     /// Shortened title for the sidebar (Smart Tab Titles); nil when the real title is short enough.

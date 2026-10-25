@@ -9,13 +9,17 @@ struct MainWindowView: View {
         let space = browser.selectedSpace
         let sidebarWidth = prefs.sidebarWidth
         let inset: CGFloat = prefs.edgeToEdgeContent ? 0 : 8
+        // Redrawing the full-window background behind a playing video makes it flicker on big high-refresh displays.
+        let videoPlaying = browser.selectedTab?.isPlayingMedia == true
+            || (browser.floatingPlayer.isActive && browser.floatingPlayer.isPlaying)
+        let animateBackground = prefs.animatedBackground && !videoPlaying
         ZStack {
             if prefs.spaceTheme {
-                StarfieldView(hue: space.hue, starCount: 320, animated: prefs.animatedBackground,
+                StarfieldView(hue: space.hue, starCount: 320, animated: animateBackground,
                               intensity: prefs.backgroundIntensity)
                     .animation(Motion.smooth, value: space.hue)
             } else {
-                MeshBackground(hue: space.hue, animated: prefs.animatedBackground)
+                MeshBackground(hue: space.hue, animated: animateBackground)
                     .opacity(prefs.backgroundIntensity)
             }
 

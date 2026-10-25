@@ -40,3 +40,19 @@ struct LiveTextClickThroughTests {
         #expect(cls is NSControl.Type)
     }
 }
+
+@MainActor
+struct MediaPlaybackBridgeTests {
+    @Test func scriptWatchesMediaEventsInEveryFrame() {
+        let script = MediaPlaybackBridge.script
+        #expect(!script.isForMainFrameOnly)
+        #expect(script.injectionTime == .atDocumentStart)
+        for event in ["playing", "pause", "ended", "emptied"] { #expect(script.source.contains("'\(event)'")) }
+        #expect(script.source.contains(MediaPlaybackBridge.handlerName))
+    }
+
+    @Test func newTabIsNotPlaying() {
+        let browser = BrowserState(library: LibraryStore(inMemory: true), restore: false)
+        #expect(!browser.newTab(url: URL(string: "about:blank")).isPlayingMedia)
+    }
+}

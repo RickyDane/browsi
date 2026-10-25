@@ -93,6 +93,7 @@ final class TabWebController: NSObject {
     /// reliably stop audio (other objects/tasks can keep it alive), so pages are unloaded explicitly.
     func tearDown() {
         ExtensionManager.shared.didClose(self)
+        tab.isPlayingMedia = false
         observations.forEach { $0.invalidate() }
         observations.removeAll()
         silence()
@@ -178,6 +179,7 @@ extension TabWebController: WKNavigationDelegate {
     }
 
     func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        Task { await MediaPlaybackBridge.refresh(tab, webView: webView) }
         if let host = webView.url?.host(), let icon = FaviconLoader.shared.cached(host: host) {
             tab.favicon = icon
         } else {

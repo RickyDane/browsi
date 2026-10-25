@@ -34,6 +34,8 @@ enum WebConfigFactory {
             ucc.addScriptMessageHandler(PasskeyBridge.shared, contentWorld: .page, name: PasskeyBridge.handlerName)
         }
         ucc.addUserScript(LoginImpactBridge.script)
+        ucc.addUserScript(MediaPlaybackBridge.script)
+        ucc.add(MediaPlaybackBridge.shared, contentWorld: .defaultClient, name: MediaPlaybackBridge.handlerName)
         ucc.addUserScript(AppleSignInBridge.script)
         ucc.addScriptMessageHandler(AppleSignInBridge.shared, contentWorld: .defaultClient,
                                     name: AppleSignInBridge.handlerName)
