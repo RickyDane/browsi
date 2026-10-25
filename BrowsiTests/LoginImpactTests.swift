@@ -119,6 +119,6 @@ struct LoginImpactTests {
         let caps = try await webView.callAsyncJavaScript(
             "return JSON.stringify(await PublicKeyCredential.getClientCapabilities())", contentWorld: .page) as? String
         #expect(caps?.contains(#""passkeyPlatformAuthenticator":true"#) == true)
-        #expect(caps?.contains(#""hybridTransport":true"#) == true)
+        #expect(caps?.contains(#""conditionalGet":false"#) == true, "Browsi's built-in authenticator is active")
     }
 }

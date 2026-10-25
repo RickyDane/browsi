@@ -30,7 +30,7 @@ nonisolated struct KeychainStore: Sendable {
         self.synchronizable = synchronizable
     }
 
-    private static let useDataProtection: Bool = {
+    static let useDataProtection: Bool = {
         // Probe once by writing a throwaway item: without an application identifier
         // (ad-hoc signing) the DP keychain rejects writes with errSecMissingEntitlement.
         let q: [String: Any] = [

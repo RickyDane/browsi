@@ -24,7 +24,7 @@ final class PasskeySupport {
 
         var summary: String {
             switch self {
-            case .missingEntitlement: "Not enabled in this build"
+            case .missingEntitlement: "Using Browsi’s built-in passkeys"
             case .notDetermined: "Waiting for your permission"
             case .authorized: "Passkeys are ready"
             case .denied: "Access was denied"
@@ -35,9 +35,17 @@ final class PasskeySupport {
     private(set) var status: Status = .missingEntitlement
     @ObservationIgnored private let manager = ASAuthorizationWebBrowserPublicKeyCredentialManager()
     @ObservationIgnored private var requesting = false
-    @ObservationIgnored private var warnedMissing = false
+    /// Passkeys stored by Browsi's built-in authenticator.
+    private(set) var saved: [Passkey] = []
 
-    init() { refresh() }
+    init() { refresh(); reloadSaved() }
+
+    func reloadSaved() { saved = PasskeyAuthenticator.store.all() }
+
+    func delete(_ passkey: Passkey) {
+        PasskeyAuthenticator.store.delete(id: passkey.id)
+        reloadSaved()
+    }
 
     /// True when the running process carries the browser passkey entitlement.
     nonisolated static var hasEntitlement: Bool {
@@ -81,9 +89,6 @@ final class PasskeySupport {
             Task { await requestAuthorizationIfNeeded() }
         case .denied:
             browser?.showToast("person.badge.key.fill", "Allow passkeys in Settings › Passwords")
-        case .missingEntitlement where !warnedMissing:
-            warnedMissing = true
-            browser?.showToast("person.badge.key.fill", "Passkeys aren’t enabled in this build")
         default:
             break
         }

@@ -513,29 +513,61 @@ private struct PasskeysSection: View {
                         .symbolEffect(.bounce, value: support.status)
                 }
             }
+            if support.status == .missingEntitlement {
+                if support.saved.isEmpty {
+                    Text("No passkeys saved yet. Choose “Create a passkey” on a website to add one.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                ForEach(support.saved) { passkey in
+                    HStack(spacing: 10) {
+                        Image(systemName: "person.badge.key.fill").foregroundStyle(.purple.gradient)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(passkey.rpID).font(.system(size: 12.5, weight: .medium))
+                            Text(passkey.label).font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Text(passkey.created, format: .dateTime.day().month().year())
+                            .font(.caption).foregroundStyle(.tertiary)
+                        Button(role: .destructive) { confirmDelete(passkey) } label: { Image(systemName: "trash") }
+                            .buttonStyle(.borderless)
+                            .help("Delete passkey")
+                    }
+                }
+            }
         } header: {
             Text("Passkeys")
         } footer: {
             Text(footer).font(.caption).foregroundStyle(.secondary)
         }
-        .onAppear { support.refresh() }
+        .onAppear { support.refresh(); support.reloadSaved() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             support.refresh()
         }
+    }
+
+    private func confirmDelete(_ passkey: Passkey) {
+        let alert = NSAlert()
+        alert.messageText = "Delete the passkey for \(passkey.label) on \(passkey.rpID)?"
+        alert.informativeText = "You won’t be able to sign in with it anymore. Remove it from the website’s security settings too."
+        alert.addButton(withTitle: "Delete")
+        alert.addButton(withTitle: "Cancel")
+        alert.buttons.first?.hasDestructiveAction = true
+        if alert.runModal() == .alertFirstButtonReturn { support.delete(passkey) }
     }
 
     private var color: Color {
         switch support.status {
         case .authorized: .green
         case .notDetermined: .orange
-        case .denied, .missingEntitlement: .red
+        case .missingEntitlement: .purple
+        case .denied: .red
         }
     }
 
     private var footer: String {
         switch support.status {
         case .missingEntitlement:
-            "This build isn’t signed with Apple’s browser passkey entitlement, so websites can’t use passkeys. See README › Passkeys to enable it."
+            "Websites can create and use passkeys stored by Browsi in your Keychain, unlocked with Touch ID. They work only in Browsi: iCloud Keychain passkeys and iPhone sign-in need Apple’s browser entitlement (README › Passkeys)."
         case .notDetermined:
             "Websites can create and use passkeys from iCloud Keychain, your iPhone (QR code) and security keys once you allow access."
         case .authorized:

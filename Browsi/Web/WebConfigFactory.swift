@@ -28,6 +28,10 @@ enum WebConfigFactory {
         if let autofillScript { ucc.addUserScript(autofillScript) }
         ucc.addScriptMessageHandler(passwordBridge, contentWorld: .defaultClient, name: PasswordBridge.handlerName)
         ucc.addUserScript(LinkBridge.script)
+        if PasskeyBridge.isActive, let script = PasskeyBridge.script {
+            ucc.addUserScript(script)
+            ucc.addScriptMessageHandler(PasskeyBridge.shared, contentWorld: .page, name: PasskeyBridge.handlerName)
+        }
         ucc.addUserScript(LoginImpactBridge.script)
         ucc.add(LoginImpactBridge.shared, contentWorld: .defaultClient, name: LoginImpactBridge.handlerName)
         ucc.add(LinkBridge.shared, contentWorld: .defaultClient, name: LinkBridge.handlerName)

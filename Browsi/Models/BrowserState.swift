@@ -81,6 +81,7 @@ final class BrowserState {
         suspender = TabSuspender(browser: self)
         floatingPlayer.browser = self
         LinkBridge.shared.browser = self
+        PasskeyAuthenticator.onNotice = { [weak self] symbol, text in self?.showToast(symbol, text) }
         LoginImpactBridge.shared.browser = self
         HomeWebCache.shared.browser = self
         WebConfigFactory.passwordBridge.onOfferSave = { [weak self] offer in

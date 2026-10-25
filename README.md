@@ -60,10 +60,19 @@ Logins are stored as `kSecClassInternetPassword` items labelled `Browsi`. An ad-
 
 ## Passkeys
 
-WebKit only lets a third-party browser use the user's passkeys if the app is signed with Apple's
-**Web Browser Public Key Credential** entitlement (`com.apple.developer.web-browser.public-key-credential`).
-Default builds are ad-hoc signed without it: pages still see the WebAuthn API, but passkey sign-in fails.
-Settings › Passwords › Passkeys shows the current state.
+Browsi ships its **own passkey authenticator**, so passkeys work without anything from Apple: when a site
+asks to create or use a passkey, Browsi generates a P-256 key, stores it in your macOS Keychain and asks
+for Touch ID (or your login password) every time. Registration and sign-in are verified end to end
+against [webauthn.io](https://webauthn.io) in the test suite. Manage saved passkeys in
+Settings › Passwords › Passkeys.
+
+Limits of the built-in authenticator: its passkeys live only in Browsi (not in iCloud Keychain), you
+can't use passkeys saved by Safari / the Passwords app or sign in with your iPhone, passkey autofill
+(conditional UI) isn't offered, and sites that demand hardware attestation may refuse it.
+
+For full system passkeys, Browsi needs Apple's **Web Browser Public Key Credential** entitlement
+(`com.apple.developer.web-browser.public-key-credential`). Once a build carries it, Browsi switches to
+the system automatically and stops injecting its own authenticator.
 
 To enable passkeys:
 
