@@ -77,6 +77,26 @@ final class TabWebController: NSObject {
         }
     }
 
+    /// Silences media immediately (used while a view animates out before `tearDown`).
+    func silence() {
+        webView.pauseAllMediaPlayback(completionHandler: nil)
+        webView.setAllMediaPlaybackSuspended(true, completionHandler: nil)
+    }
+
+    /// Stops everything the page is doing. Dropping the last reference to a WKWebView does not
+    /// reliably stop audio (other objects/tasks can keep it alive), so pages are unloaded explicitly.
+    func tearDown() {
+        observations.forEach { $0.invalidate() }
+        observations.removeAll()
+        silence()
+        webView.closeAllMediaPresentations(completionHandler: nil)
+        webView.stopLoading()
+        webView.navigationDelegate = nil
+        webView.uiDelegate = nil
+        webView.loadHTMLString("", baseURL: nil)
+        webView.removeFromSuperview()
+    }
+
     func setZoom(_ z: Double) {
         tab.zoom = min(3, max(0.5, z))
         webView.pageZoom = tab.zoom

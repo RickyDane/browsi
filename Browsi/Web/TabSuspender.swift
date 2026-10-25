@@ -59,7 +59,7 @@ final class TabSuspender {
             tab.snapshot = try? await webView.takeSnapshot(configuration: nil)
         }
         tab.interactionState = webView.interactionState
-        webView.stopLoading()
+        controller.tearDown()
         tab.controller = nil
         tab.isLoading = false
     }

@@ -1,6 +1,9 @@
 import AppKit
 import SwiftUI
 import WebKit
+import OSLog
+
+private let log = Logger(subsystem: "dev.perlick.browsi", category: "FloatingPlayer")
 
 /// When the user leaves a tab that is playing a video, the tab's own WKWebView is moved into a
 /// floating, draggable, resizable panel with the video styled to fill it. Selecting the tab again
@@ -63,14 +66,33 @@ final class FloatingPlayer {
 
     /// Called after `tab` stopped being the visible tab.
     func considerPopOut(_ tab: Tab) {
+        debugLog("considerPopOut \(tab.displayTitle) enabled=\(Preferences.shared.floatingVideoEnabled) hasWebView=\(tab.controller != nil)")
         guard Preferences.shared.floatingVideoEnabled, tab !== self.tab,
               let webView = tab.controller?.webView else { return }
+        debugLog("considerPopOut frame=\(NSStringFromRect(webView.frame)) inWindow=\(webView.window != nil)")
         Task {
-            guard await webView.requestMediaPlaybackState() == .playing else { return }
-            let result = try? await webView.evaluateJavaScript(Self.popOutJS, contentWorld: .defaultClient)
+            let state = await webView.requestMediaPlaybackState()
+            debugLog("considerPopOut: playback state \(state.rawValue)")
+            guard state == .playing else { return }
+            let result: Any?
+            do {
+                result = try await webView.evaluateJavaScript(Self.popOutJS, contentWorld: .defaultClient)
+            } catch {
+                debugLog("popOut JS failed: \(error.localizedDescription)")
+                return
+            }
+            debugLog("popOut JS result: \(String(describing: result))")
+            #if DEBUG
+            if result == nil || result is NSNull {
+                let diag = try? await webView.evaluateJavaScript("""
+                  JSON.stringify([...document.querySelectorAll('video')].map(v => ({p:v.paused,e:v.ended,m:v.muted,vol:v.volume,rs:v.readyState,w:v.clientWidth,h:v.clientHeight,vw:v.videoWidth})).concat([{vis:document.visibilityState, iw:innerWidth, ih:innerHeight}]))
+                """, contentWorld: .defaultClient)
+                debugLog("popOut diag: \(String(describing: diag))")
+            }
+            #endif
             guard let dims = result as? [Double], dims.count == 2, dims[0] > 0, dims[1] > 0,
                   tab !== browser?.selectedTab, tab.controller?.webView === webView else {
-                if result != nil { _ = try? await webView.evaluateJavaScript(Self.restoreJS, contentWorld: .defaultClient) }
+                if result != nil, !(result is NSNull) { _ = try? await webView.evaluateJavaScript(Self.restoreJS, contentWorld: .defaultClient) }
                 return
             }
             present(tab: tab, webView: webView, aspect: NSSize(width: dims[0], height: dims[1]))
@@ -79,6 +101,7 @@ final class FloatingPlayer {
 
     private func present(tab: Tab, webView: WKWebView, aspect: NSSize) {
         if self.tab != nil { close(returnTo: nil) }
+        debugLog("present: floating \(tab.displayTitle) \(aspect.width)x\(aspect.height)")
         self.tab = tab
         tab.isInFloatingPlayer = true
         isPlaying = true

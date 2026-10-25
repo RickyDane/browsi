@@ -34,7 +34,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.appearance = Preferences.shared.theme.appearance
+        #if DEBUG
+        if let url = ProcessInfo.processInfo.environment["BROWSI_DEBUG_FLOAT_URL"].flatMap(URL.init(string:)) {
+            Task { await Self.debugFloatingScenario(url) }
+        }
+        #endif
     }
+
+    #if DEBUG
+    /// Opens `url`, waits for its video to play, then switches to a new tab (manual QA aid).
+    private static func debugFloatingScenario(_ url: URL) async {
+        try? await Task.sleep(for: .seconds(1))
+        for w in NSApp.windows {
+            debugLog("window \(w.className) visible=\(w.isVisible) occl=\(w.occlusionState.rawValue) frame=\(NSStringFromRect(w.frame))")
+        }
+        let tab = browser.newTab(url: url)
+        for _ in 0..<30 {
+            try? await Task.sleep(for: .seconds(1))
+            if await tab.controller?.webView.requestMediaPlaybackState() == .playing { break }
+        }
+        try? await Task.sleep(for: .seconds(3))
+        browser.newTab(url: URL(string: "https://example.com"))
+    }
+    #endif
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         let count = Self.browser.allTabs.count

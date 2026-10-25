@@ -106,7 +106,7 @@ final class BrowserState {
         let previous = selectedTab
         if tab.isInFloatingPlayer { floatingPlayer.close(returnTo: tab) }
         if previous === tab { return }
-        peek = nil
+        if peek?.tab !== tab { closePeek() }
         if let space = space(of: tab), space.id != selectedSpaceID { switchSpace(to: space) }
         if let old = previous?.controller?.webView, old.window != nil {
             // Grab a snapshot while still on-screen; used if the tab is later suspended.
@@ -152,7 +152,7 @@ final class BrowserState {
         }
         if tab.isInFloatingPlayer { floatingPlayer.close(returnTo: nil) }
         if peek?.tab === tab { peek = nil }
-        tab.controller?.webView.stopLoading()
+        tab.controller?.tearDown()
         tab.controller = nil
         if wasSelected {
             let remaining = space.allTabs
@@ -251,7 +251,7 @@ final class BrowserState {
         spaceSwitchDirection = to >= from ? 1 : -1
         let previous = selectedTab
         previous?.lastActive = .now
-        peek = nil
+        closePeek()
         withAnimation(Motion.smooth) { selectedSpaceID = space.id }
         if let tab = space.selectedTab ?? space.allTabs.first {
             if tab.isInFloatingPlayer { floatingPlayer.close(returnTo: tab) }
@@ -288,7 +288,7 @@ final class BrowserState {
             switchSpace(to: spaces.first { $0.id != space.id }!)
         }
         if let t = floatingPlayer.tab, space.allTabs.contains(where: { $0 === t }) { floatingPlayer.close(returnTo: nil) }
-        space.allTabs.forEach { $0.controller = nil }
+        space.allTabs.forEach { $0.controller?.tearDown(); $0.controller = nil }
         withAnimation(Motion.snappy) { spaces.removeAll { $0.id == space.id } }
         scheduleSave()
     }
@@ -298,11 +298,14 @@ final class BrowserState {
     func closePeek() {
         guard let p = peek else { return }
         withAnimation(Motion.snappy) { peek = nil }
+        // Silence right away; unload once the dismiss transition has finished.
+        p.tab.controller?.silence()
         p.tab.controller?.webView.stopLoading()
-        // Let the dismiss transition finish before tearing the web view down.
         Task {
             try? await Task.sleep(for: .milliseconds(400))
-            if self.peek?.tab !== p.tab { p.tab.controller = nil }
+            guard self.peek?.tab !== p.tab, !self.allTabs.contains(where: { $0 === p.tab }) else { return }
+            p.tab.controller?.tearDown()
+            p.tab.controller = nil
         }
     }
 
@@ -431,6 +434,7 @@ extension BrowserState: TabEventsDelegate {
     }
 
     func peek(url: URL, from tab: Tab) {
+        closePeek()
         let peekTab = Tab(url: url)
         let c = TabWebController(tab: peekTab, delegate: self)
         c.isPeek = true
