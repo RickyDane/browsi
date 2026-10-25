@@ -14,6 +14,13 @@ scripts/build.sh test     # build + Swift Testing run; look for "Test run with N
 - Long builds and test runs should run as a background task so failures are noticed.
 - A change is done when the build has **no errors and no new warnings** and all tests pass.
 
+## Signing
+
+- Signing lives in `Config/Signing.xcconfig` (ad-hoc default) and the git-ignored `Config/Signing.local.xcconfig`
+  (team, profile, `Browsi-Passkeys.entitlements`). Never put a team ID or profile into `project.yml`.
+- Keep `Browsi.entitlements` and `Browsi-Passkeys.entitlements` identical apart from the passkey key.
+- Metal shaders need the Metal toolchain: `xcodebuild -downloadComponent MetalToolchain`.
+
 ## Swift conventions
 
 - Swift 6, `SWIFT_STRICT_CONCURRENCY=complete`, **default actor isolation is `MainActor`** for both targets.

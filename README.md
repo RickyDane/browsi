@@ -12,6 +12,8 @@ A native macOS browser built with SwiftUI and WebKit: vertical tabs, Spaces, Liq
 - **Link Peek**: ⇧-click a link to preview it in a glass modal. ⌘↩ opens it as a tab, Esc closes it.
 - **Middle-click**: middle-click a link to open it in a background tab (⇧ for foreground); middle-click a tab in the sidebar to close it.
 - **Smart-rename downloads**: unclear names like `file_8f3a2c91.pdf` are renamed by Apple Intelligence's on-device model (Foundation Models) from the source page and the file's text, e.g. `Acme Invoice 8823 2026-10.pdf`.
+- **Wave impact**: clicking "Sign in with Apple" or a passkey button makes the page ripple like water from the click (Metal shader), with shockwave rings, sparks, a flash and a short card shake. Toned down for Reduce Motion; toggle in Settings › Appearance.
+- **Passkeys**: full WebAuthn via WebKit (iCloud Keychain, password-manager apps, iPhone via QR code, security keys, passkey autofill), once the build carries Apple's browser passkey entitlement (see below).
 - **Command palette** (⌘T / ⌘L / ⌘K): fuzzy search across open tabs, bookmarks, history and commands, with URL-or-search fallback.
 - **Keychain passwords**: captures logins, offers to save them as Keychain items, autofills behind Touch ID, and has a password manager in Settings.
 - **Tracker & ad blocking**: a compiled WebKit content rule list, toggled per site from the shield in the address bar.
@@ -50,6 +52,27 @@ To work in Xcode, run `xcodegen generate` and open `Browsi.xcodeproj`. The proje
 ## Passwords & signing
 
 Logins are stored as `kSecClassInternetPassword` items labelled `Browsi`. An ad-hoc-signed build (the default) uses the login keychain. If you sign with an Apple Development team, Browsi switches to the data-protection keychain automatically, and the *Sync via iCloud Keychain* toggle takes effect. Browsi cannot read Safari's or the Passwords app's entries.
+
+## Passkeys
+
+WebKit only lets a third-party browser use the user's passkeys if the app is signed with Apple's
+**Web Browser Public Key Credential** entitlement (`com.apple.developer.web-browser.public-key-credential`).
+Default builds are ad-hoc signed without it: pages still see the WebAuthn API, but passkey sign-in fails.
+Settings › Passwords › Passkeys shows the current state.
+
+To enable passkeys:
+
+1. **Request the entitlement** for your team via the request form linked from Apple's [Passkey use in web browsers](https://developer.apple.com/documentation/authenticationservices/passkey-use-in-web-browsers) documentation (sign in with your developer account; macOS browser, bundle id `dev.perlick.browsi`).
+2. Once Apple grants it, in *Certificates, Identifiers & Profiles*:
+   - register the App ID `dev.perlick.browsi` and enable the **Web Browser Public Key Credential** capability;
+   - make sure you have an **Apple Development** (and later **Developer ID Application**) certificate;
+   - create a **macOS App Development** provisioning profile for that App ID that includes your Mac, name it e.g. `Browsi Passkeys Development`, download it and double-click to install.
+3. `cp Config/Signing.local.xcconfig.example Config/Signing.local.xcconfig` and adjust the team / profile name (the file is git-ignored).
+4. `scripts/build.sh`, launch, then Settings › Passwords › Passkeys › **Allow…**. macOS then lists Browsi under
+   System Settings › Privacy & Security › Passkeys Access for Web Browsers. Clicking a passkey button on a site also prompts.
+5. For distribution, use a Developer ID profile with the same capability and `CODE_SIGN_IDENTITY = Developer ID Application`, then notarize.
+
+Team signing also moves saved passwords to the data-protection keychain and makes the iCloud sync toggle work.
 
 ## Further reading
 

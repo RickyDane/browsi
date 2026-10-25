@@ -1,0 +1,9 @@
+// Copy to Config/Signing.local.xcconfig (git-ignored), then: scripts/build.sh
+// Requires the "Web Browser Public Key Credential" capability on the App ID dev.perlick.browsi
+// and a provisioning profile that includes it.
+CODE_SIGN_STYLE = Manual
+DEVELOPMENT_TEAM = 4T73YMH6PG
+CODE_SIGN_IDENTITY = Apple Development
+// Name of the profile as shown in the developer portal / Xcode › Settings › Accounts
+PROVISIONING_PROFILE_SPECIFIER = Browsi Passkeys Development
+CODE_SIGN_ENTITLEMENTS = Browsi/Resources/Browsi-Passkeys.entitlements

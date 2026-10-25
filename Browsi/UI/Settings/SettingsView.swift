@@ -176,6 +176,7 @@ private struct AppearancePane: View {
                 Toggle("Edge-to-edge web content", isOn: $prefs.edgeToEdgeContent)
             }
             Section("Motion") {
+                Toggle("Wave impact on “Sign in with Apple” and passkey buttons", isOn: $prefs.loginImpactAnimation)
                 Toggle("Reduce animations", isOn: $prefs.reduceAnimations)
                 Text("Browsi also follows the system “Reduce motion” accessibility setting.")
                     .font(.caption).foregroundStyle(.secondary)
@@ -312,6 +313,7 @@ private struct PasswordsPane: View {
                     Label("Saved passwords live in your macOS Keychain", systemImage: "lock.shield.fill")
                 }
             }
+            PasskeysSection()
             Section("AutoFill") {
                 Toggle("Offer to save passwords", isOn: $prefs.offerToSavePasswords)
                 Toggle("AutoFill saved passwords", isOn: $prefs.autofillPasswords)
@@ -475,6 +477,67 @@ private struct AdvancedPane: View {
             Button("Reset", role: .destructive) { prefs.resetAll() }
         } message: {
             Text("Saved passwords, history, bookmarks and tabs are not affected.")
+        }
+    }
+}
+
+// MARK: - Passkeys
+
+private struct PasskeysSection: View {
+    @State private var support = PasskeySupport.shared
+
+    var body: some View {
+        Section {
+            LabeledContent {
+                switch support.status {
+                case .notDetermined:
+                    Button("Allow…") { Task { await support.requestAuthorizationIfNeeded() } }
+                case .denied:
+                    Button("Open System Settings") { support.openSystemSettings() }
+                default:
+                    EmptyView()
+                }
+            } label: {
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Passkeys")
+                        Text(support.status.summary).font(.caption).foregroundStyle(color)
+                    }
+                } icon: {
+                    Image(systemName: support.status == .authorized ? "person.badge.key.fill" : "person.badge.key")
+                        .foregroundStyle(color)
+                        .symbolEffect(.bounce, value: support.status)
+                }
+            }
+        } header: {
+            Text("Passkeys")
+        } footer: {
+            Text(footer).font(.caption).foregroundStyle(.secondary)
+        }
+        .onAppear { support.refresh() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            support.refresh()
+        }
+    }
+
+    private var color: Color {
+        switch support.status {
+        case .authorized: .green
+        case .notDetermined: .orange
+        case .denied, .missingEntitlement: .red
+        }
+    }
+
+    private var footer: String {
+        switch support.status {
+        case .missingEntitlement:
+            "This build isn’t signed with Apple’s browser passkey entitlement, so websites can’t use passkeys. See README › Passkeys to enable it."
+        case .notDetermined:
+            "Websites can create and use passkeys from iCloud Keychain, your iPhone (QR code) and security keys once you allow access."
+        case .authorized:
+            "Websites can create and use passkeys from iCloud Keychain, password-manager apps, your iPhone (QR code) and security keys."
+        case .denied:
+            "Turn on Browsi under Privacy & Security › Passkeys Access for Web Browsers."
         }
     }
 }

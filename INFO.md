@@ -46,6 +46,10 @@ MainWindowView
 | `Web/LinkBridge.swift` | Isolated-world script that turns trusted middle-clicks on links into new tabs (WebKit doesn't navigate on middle-click). |
 | `UI/Sidebar/MiddleClickCloser.swift` | App-wide monitor + hover tracking to close sidebar tabs with the middle button. |
 | `Web/SmartRenamer.swift` | Foundation Models (`@Generable SmartFileName`) download renaming; PDF/text snippets via PDFKit; pure sanitising helpers. |
+| `Passwords/PasskeySupport.swift` | Checks the browser passkey entitlement (`SecTask`) and drives `ASAuthorizationWebBrowserPublicKeyCredentialManager` authorization. WebKit performs the WebAuthn ceremonies. |
+| `Web/LoginImpactBridge.swift` | Isolated-world detector for trusted clicks on "Sign in with Apple" / passkey buttons (EN + DE patterns). |
+| `UI/Effects/ImpactOverlay.swift` + `Ripple.metal` | Wave-impact: `browsiRipple` layer shader over a page snapshot, Canvas rings/sparks/flash, `ImpactShake` keyframes. |
+| `Config/Signing.xcconfig` | Default ad-hoc signing; includes optional git-ignored `Signing.local.xcconfig` for team + passkey entitlement. |
 | `Web/TabSuspender.swift` | 30 s sweep + memory-pressure source; snapshot + `interactionState`, then release. |
 | `Passwords/KeychainStore.swift` | `SecItem*` wrapper; probes the data-protection keychain, falls back to the login keychain. |
 | `Passwords/PasswordBridge.swift` + `Resources/autofill.js` | JS ↔ native messages `accounts` / `fill` / `submit` in the isolated `.defaultClient` content world. |

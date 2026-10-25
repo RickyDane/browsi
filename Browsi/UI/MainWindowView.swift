@@ -115,6 +115,9 @@ private struct ContentCard: View {
                         .transition(.opacity)
                 }
                 ProgressGlow(progress: tab.progress, isLoading: tab.isLoading, tint: browser.selectedSpace.color)
+                if let impact = browser.impact {
+                    ImpactOverlay(impact: impact).id(impact.id)
+                }
             } else {
                 // Empty space: let the mesh glow through a frosted card.
                 Rectangle().fill(.ultraThinMaterial)
@@ -126,6 +129,7 @@ private struct ContentCard: View {
         .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(.primary.opacity(edgeToEdge ? 0 : 0.08)))
         .shadow(color: .black.opacity(edgeToEdge ? 0 : 0.14), radius: 14, y: 4)
+        .modifier(ImpactShake(trigger: browser.impact?.id))
     }
 }
 

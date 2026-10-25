@@ -3,3 +3,4 @@
 build/
 DerivedData/
 xcuserdata/
+Config/Signing.local.xcconfig

@@ -82,6 +82,7 @@ final class Preferences {
     var animatedBackground: Bool { didSet { d.set(animatedBackground, forKey: "animatedBackground") } }
     var backgroundIntensity: Double { didSet { d.set(backgroundIntensity, forKey: "backgroundIntensity") } }
     var edgeToEdgeContent: Bool { didSet { d.set(edgeToEdgeContent, forKey: "edgeToEdgeContent") } }
+    var loginImpactAnimation: Bool { didSet { d.set(loginImpactAnimation, forKey: "loginImpactAnimation") } }
     var reduceAnimations: Bool { didSet { d.set(reduceAnimations, forKey: "reduceAnimations") } }
     var showFullURL: Bool { didSet { d.set(showFullURL, forKey: "showFullURL") } }
     var showSuspendedIndicator: Bool { didSet { d.set(showSuspendedIndicator, forKey: "showSuspendedIndicator") } }
@@ -150,6 +151,7 @@ final class Preferences {
         backgroundIntensity = dbl("backgroundIntensity", 0.85)
         edgeToEdgeContent = bool("edgeToEdgeContent", false)
         reduceAnimations = bool("reduceAnimations", false)
+        loginImpactAnimation = bool("loginImpactAnimation", true)
         showFullURL = bool("showFullURL", false)
         showSuspendedIndicator = bool("showSuspendedIndicator", true)
 
@@ -199,6 +201,7 @@ final class Preferences {
         theme = fresh.theme; sidebarWidth = fresh.sidebarWidth; tabDensity = fresh.tabDensity
         animatedBackground = fresh.animatedBackground; backgroundIntensity = fresh.backgroundIntensity
         edgeToEdgeContent = fresh.edgeToEdgeContent; reduceAnimations = fresh.reduceAnimations
+        loginImpactAnimation = fresh.loginImpactAnimation
         showFullURL = fresh.showFullURL; showSuspendedIndicator = fresh.showSuspendedIndicator
         suspendAfterMinutes = fresh.suspendAfterMinutes; newTabPosition = fresh.newTabPosition
         commandClickOpensInBackground = fresh.commandClickOpensInBackground

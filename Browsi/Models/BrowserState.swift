@@ -28,6 +28,8 @@ final class BrowserState {
     /// Link Peek preview (⇧-click), shown as a modal over the content.
     var peek: PeekState?
     let floatingPlayer = FloatingPlayer()
+    /// Wave-impact animation currently playing over the content card.
+    var impact: LoginImpact?
 
     let library: LibraryStore
     @ObservationIgnored private var closedTabs: [(url: URL, spaceID: UUID)] = []
@@ -55,6 +57,7 @@ final class BrowserState {
         suspender = TabSuspender(browser: self)
         floatingPlayer.browser = self
         LinkBridge.shared.browser = self
+        LoginImpactBridge.shared.browser = self
         WebConfigFactory.passwordBridge.onOfferSave = { [weak self] offer in
             withAnimation(.bouncy) { self?.pendingPasswordSave = offer }
         }
@@ -294,6 +297,25 @@ final class BrowserState {
         space.allTabs.forEach { $0.controller?.tearDown(); $0.controller = nil }
         withAnimation(Motion.snappy) { spaces.removeAll { $0.id == space.id } }
         scheduleSave()
+    }
+
+    // MARK: Login impact
+
+    func playLoginImpact(_ kind: LoginImpact.Kind, at point: CGPoint, buttonSize: CGSize, in webView: WKWebView) {
+        guard Preferences.shared.loginImpactAnimation else { return }
+        let impact = LoginImpact(kind: kind, origin: point, buttonSize: buttonSize)
+        self.impact = impact
+        NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .now)
+        Task {
+            // The rings start immediately; the page ripple joins as soon as the snapshot is ready.
+            let config = WKSnapshotConfiguration()
+            config.afterScreenUpdates = false
+            if let snap = try? await webView.takeSnapshot(configuration: config), self.impact?.id == impact.id {
+                self.impact?.snapshot = snap
+            }
+            try? await Task.sleep(for: .seconds(ImpactOverlay.duration))
+            if self.impact?.id == impact.id { self.impact = nil }
+        }
     }
 
     // MARK: Link Peek
