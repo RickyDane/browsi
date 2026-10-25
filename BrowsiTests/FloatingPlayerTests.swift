@@ -48,10 +48,22 @@ struct FloatingPlayerTests {
         #expect(videoTab.isInFloatingPlayer)
         #expect(webView.window != nil && webView.window !== window, "web view should live in the panel")
 
+        // Only the video may be visible in the floating window — no masthead, controls or page.
+        let extracted = await until(.seconds(3)) {
+            (try? await webView.evaluateJavaScript(FloatingPlayer.isExtractedJS, contentWorld: .defaultClient)) as? Bool == true
+        }
+        #expect(extracted, "video must be extracted above all page content")
+
         browser.select(videoTab)
         #expect(!videoTab.isInFloatingPlayer)
         #expect(browser.floatingPlayer.tab == nil)
         #expect(await webView.requestMediaPlaybackState() == .playing, "returning must keep playback going")
+        let restored = await until(.seconds(2)) {
+            (try? await webView.evaluateJavaScript(
+                "!document.querySelector('[data-browsi-float]') && !document.querySelector(':popover-open') && !document.getElementById('browsi-float-style')",
+                contentWorld: .defaultClient)) as? Bool == true
+        }
+        #expect(restored, "page must be restored when the video returns to its tab")
     }
 
     /// Regression: media in a closed Link Peek kept playing.

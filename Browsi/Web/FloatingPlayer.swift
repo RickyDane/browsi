@@ -21,8 +21,10 @@ final class FloatingPlayer {
 
     private static let markAttr = "data-browsi-float"
 
-    /// Finds the largest audible playing video, tags it and makes it fill the viewport.
-    /// Returns [videoWidth, videoHeight] or null.
+    /// Finds the largest audible playing video and *extracts* it: the element is promoted into the
+    /// browser's top layer (Popover API), which renders above everything else on the page regardless of
+    /// stacking contexts, transforms or fixed headers, and is sized to the viewport. The element is not
+    /// moved in the DOM, so the site's player keeps working. Returns [videoWidth, videoHeight] or null.
     private static let popOutJS = """
     (() => {
       const vids = [...document.querySelectorAll('video')].filter(v =>
@@ -31,18 +33,42 @@ final class FloatingPlayer {
       vids.sort((a, b) => b.clientWidth * b.clientHeight - a.clientWidth * a.clientHeight);
       const v = vids[0];
       if (v.clientWidth * v.clientHeight < 240 * 135) return null;
-      v.setAttribute('\(markAttr)', '');
-      let s = document.getElementById('browsi-float-style');
-      if (!s) {
-        s = document.createElement('style');
+      if (!document.getElementById('browsi-float-style')) {
+        const s = document.createElement('style');
         s.id = 'browsi-float-style';
         s.textContent = `
-          html, body { overflow: hidden !important; }
-          video[\(markAttr)] { position: fixed !important; inset: 0 !important; left: 0 !important; top: 0 !important;
-            width: 100vw !important; height: 100vh !important; max-width: none !important; max-height: none !important;
-            transform: none !important; object-fit: contain !important; background: #000 !important;
-            z-index: 2147483647 !important; margin: 0 !important; }`;
+          html, body { overflow: hidden !important; background: #000 !important; }
+          /* Hide everything except the video (descendants may override visibility; the video does). */
+          html[\(markAttr)-active] body * { visibility: hidden !important; }
+          html[\(markAttr)-active] { visibility: hidden !important; }
+          html[\(markAttr)-active] body video[\(markAttr)], video[\(markAttr)] {
+            position: fixed !important; inset: 0 !important; left: 0 !important; top: 0 !important;
+            right: 0 !important; bottom: 0 !important; margin: 0 !important; padding: 0 !important;
+            border: 0 !important; outline: 0 !important; border-radius: 0 !important;
+            width: 100vw !important; height: 100vh !important; min-width: 0 !important; min-height: 0 !important;
+            max-width: none !important; max-height: none !important; transform: none !important;
+            translate: none !important; scale: none !important; rotate: none !important;
+            object-fit: contain !important; object-position: center !important;
+            background: #000 !important; opacity: 1 !important; visibility: visible !important;
+            filter: none !important; clip-path: none !important; mask: none !important;
+            z-index: 2147483647 !important; display: block !important; overflow: hidden !important;
+          }
+          video[\(markAttr)]::backdrop { background: #000 !important; }`;
         (document.head || document.documentElement).appendChild(s);
+      }
+      v.setAttribute('\(markAttr)', '');
+      document.documentElement.setAttribute('\(markAttr)-active', '');
+      if (typeof v.showPopover === 'function') {
+        if (!v.hasAttribute('popover')) { v.setAttribute('popover', 'manual'); v.dataset.browsiAddedPopover = '1'; }
+        const keepOnTop = () => {
+          try { if (v.isConnected && !v.matches(':popover-open')) v.showPopover(); }
+          catch (e) { document.documentElement.dataset.browsiPopoverError = String(e); }
+        };
+        keepOnTop();
+        // Sites like YouTube re-parent the player when the viewport shrinks, which closes the
+        // popover. Re-open it whenever that happens.
+        clearInterval(window.__browsiFloatTimer);
+        window.__browsiFloatTimer = setInterval(keepOnTop, 200);
       }
       return [v.videoWidth, v.videoHeight];
     })()
@@ -50,9 +76,26 @@ final class FloatingPlayer {
 
     private static let restoreJS = """
     (() => {
+      clearInterval(window.__browsiFloatTimer);
+      document.querySelectorAll('[\(markAttr)]').forEach(v => {
+        try { if (v.matches(':popover-open')) v.hidePopover(); } catch (e) {}
+        if (v.dataset.browsiAddedPopover) { v.removeAttribute('popover'); delete v.dataset.browsiAddedPopover; }
+        v.removeAttribute('\(markAttr)');
+      });
+      document.documentElement.removeAttribute('\(markAttr)-active');
+      delete document.documentElement.dataset.browsiPopoverError;
       document.getElementById('browsi-float-style')?.remove();
-      document.querySelectorAll('[\(markAttr)]').forEach(v => v.removeAttribute('\(markAttr)'));
       window.dispatchEvent(new Event('resize'));
+    })()
+    """
+
+    /// Debug/test helper: true when only the extracted video is visible (nothing paints above it).
+    static let isExtractedJS = """
+    (() => {
+      const v = document.querySelector('[\(markAttr)]'); if (!v) return false;
+      const W = innerWidth, H = innerHeight;
+      const pts = [[W/2,H/2],[8,8],[W-8,8],[8,H-8],[W-8,H-8],[W/2,12]];
+      return pts.every(([x,y]) => document.elementFromPoint(x,y) === v);
     })()
     """
 
@@ -102,6 +145,22 @@ final class FloatingPlayer {
     private func present(tab: Tab, webView: WKWebView, aspect: NSSize) {
         if self.tab != nil { close(returnTo: nil) }
         debugLog("present: floating \(tab.displayTitle) \(aspect.width)x\(aspect.height)")
+        #if DEBUG
+        Task {
+            try? await Task.sleep(for: .seconds(1))
+            let ok = try? await webView.evaluateJavaScript(Self.isExtractedJS, contentWorld: .defaultClient)
+            debugLog("extracted=\(String(describing: ok))")
+            let diag = try? await webView.evaluateJavaScript("""
+              (() => { const v = document.querySelector('[\(Self.markAttr)]'); if (!v) return 'no video';
+                const r = v.getBoundingClientRect(); const W = innerWidth, H = innerHeight;
+                const d = e => e ? (e.tagName + (e.id ? '#' + e.id : '') + (e.className && typeof e.className === 'string' ? '.' + e.className.split(' ')[0] : '')) : 'null';
+                return JSON.stringify({open: v.matches(':popover-open'), pop: v.getAttribute('popover'), rect: [r.x, r.y, r.width, r.height], vp: [W, H],
+                  pts: [[W/2,H/2],[8,8],[W-8,8],[8,H-8],[W-8,H-8],[W/2,12]].map(([x,y]) => d(document.elementFromPoint(x,y))),
+                  style: v.getAttribute('style'), err: document.documentElement.dataset.browsiPopoverError}) })()
+            """, contentWorld: .defaultClient)
+            debugLog("extract diag: \(String(describing: diag))")
+        }
+        #endif
         self.tab = tab
         tab.isInFloatingPlayer = true
         isPlaying = true

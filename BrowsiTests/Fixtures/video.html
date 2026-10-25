@@ -1,5 +1,22 @@
 <!doctype html><meta charset="utf-8"><title>Video fixture</title>
-<body style="margin:0;background:#222">
-<div style="padding:40px"><video id="v" src="clip.mp4" width="640" height="360" autoplay loop playsinline></video></div>
-<p style="color:#fff">Fixture for floating-player tests.</p>
-</body>
+<style>
+  body { margin: 0; background: #222; font: 14px system-ui; color: #fff; }
+  /* Mimic YouTube: a fixed masthead with a huge z-index… */
+  header { position: fixed; top: 0; left: 0; right: 0; height: 56px; background: #c00; z-index: 9999; }
+  /* …and a player inside a transformed, stacking-context container. */
+  #player { margin-top: 80px; position: relative; z-index: 1; transform: translateZ(0); width: 640px; height: 360px; }
+  #controls { position: absolute; inset: auto 0 0 0; height: 40px; background: rgba(0,0,0,.6); z-index: 5; }
+  video { position: absolute; left: 0; top: 0; width: 640px; height: 360px; }
+</style>
+<header>Masthead</header>
+<div id="player"><video id="v" src="clip.mp4" autoplay loop playsinline></video><div id="controls"></div></div>
+<div id="narrow" style="position:relative;z-index:2;transform:translateZ(0)"></div>
+<script>
+  // Mimic YouTube re-parenting the <video> when the viewport becomes narrow (this closes popovers).
+  addEventListener('resize', () => {
+    const v = document.getElementById('v');
+    const target = innerWidth < 600 ? document.getElementById('narrow') : document.getElementById('player');
+    if (v.parentElement !== target) target.prepend(v);
+  });
+</script>
+<p style="height:2000px">Fixture for floating-player tests.</p>
