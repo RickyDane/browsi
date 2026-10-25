@@ -115,6 +115,8 @@ private struct HomeSearchBar: View {
                                                                     startPoint: .topLeading, endPoint: .bottomTrailing))
                                      : AnyShapeStyle(.secondary))
                     .symbolEffect(.pulse, options: .repeating, isActive: search.phase == .working)
+                    .symbolEffect(.bounce, value: focused)
+                    .scaleEffect(focused && !Motion.reduceMotion ? 1.12 : 1)
                 TextField("", text: $query,
                           prompt: Text(SmartSearch.isAvailable ? "Ask anything, search, or enter an address"
                                                                 : "Search or enter an address")
@@ -123,6 +125,7 @@ private struct HomeSearchBar: View {
                     .font(.system(size: 18))
                     .focused($focused)
                     .onSubmit(submit)
+                    .onKeyPress(.escape) { focused = false; return .handled }
                 if !query.isEmpty {
                     Button("Search \(engine.name)") { openWebSearch() }
                         .buttonStyle(.glass).controlSize(.small)
@@ -137,9 +140,23 @@ private struct HomeSearchBar: View {
         .frame(maxWidth: 720)
         .glassEffect(.regular, in: .rect(cornerRadius: 18, style: .continuous))
         .overlay {
+            // Focus ring: a soft space-tinted rim that blooms in when the bar is focused.
+            let tint = browser.selectedSpace.color
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(tint.opacity(focused ? 0.75 : 0), lineWidth: 1.5)
+                .background {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(tint.opacity(focused ? 0.45 : 0), lineWidth: 8)
+                        .blur(radius: 12)
+                }
+                .allowsHitTesting(false)
+        }
+        .overlay {
             if search.phase == .working { IntelligenceGlow(cornerRadius: 18) }
         }
-        .shadow(color: .black.opacity(0.12), radius: 18, y: 8)
+        .scaleEffect(focused && !Motion.reduceMotion ? 1.025 : 1)
+        .shadow(color: .black.opacity(focused ? 0.2 : 0.12), radius: focused ? 28 : 18, y: focused ? 14 : 8)
+        .animation(Motion.bouncy, value: focused)
         .animation(Motion.snappy, value: query.isEmpty)
         .onAppear { DispatchQueue.main.async { focused = true } }
         .onChange(of: query) { if $1.isEmpty { search.reset() } }
