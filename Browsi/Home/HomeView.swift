@@ -115,8 +115,10 @@ private struct HomeSearchBar: View {
                                                                     startPoint: .topLeading, endPoint: .bottomTrailing))
                                      : AnyShapeStyle(.secondary))
                     .symbolEffect(.pulse, options: .repeating, isActive: search.phase == .working)
-                TextField(SmartSearch.isAvailable ? "Ask anything, search, or enter an address" : "Search or enter an address",
-                          text: $query)
+                TextField("", text: $query,
+                          prompt: Text(SmartSearch.isAvailable ? "Ask anything, search, or enter an address"
+                                                                : "Search or enter an address")
+                              .foregroundStyle(.secondary))
                     .textFieldStyle(.plain)
                     .font(.system(size: 18))
                     .focused($focused)
@@ -133,7 +135,7 @@ private struct HomeSearchBar: View {
             .frame(height: HomeView.barHeight)
         }
         .frame(maxWidth: 720)
-        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 18, style: .continuous))
+        .glassEffect(.regular, in: .rect(cornerRadius: 18, style: .continuous))
         .overlay {
             if search.phase == .working { IntelligenceGlow(cornerRadius: 18) }
         }
