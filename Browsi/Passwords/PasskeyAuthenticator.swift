@@ -212,8 +212,12 @@ enum PasskeyAuthenticator {
     }
 
     static var onNotice: ((String, String) -> Void)?
+    /// true when a request starts, false when it has been answered (drives the passkey grid animation).
+    static var onCeremony: ((Bool) -> Void)?
 
     static func handle(_ body: [String: Any], origin: WebOrigin, sameOriginAsTop: Bool) async -> [String: Any] {
+        onCeremony?(true)
+        defer { onCeremony?(false) }
         do {
             guard origin.isSecure else { throw WebAuthnError.security }
             guard sameOriginAsTop else { throw WebAuthnError.notAllowed }

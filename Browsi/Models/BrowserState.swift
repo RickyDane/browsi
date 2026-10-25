@@ -84,6 +84,7 @@ final class BrowserState {
         floatingPlayer.browser = self
         LinkBridge.shared.browser = self
         PasskeyAuthenticator.onNotice = { [weak self] symbol, text in self?.showToast(symbol, text) }
+        PasskeyAuthenticator.onCeremony = { [weak self] started in self?.passkeyCeremony(started: started) }
         LoginImpactBridge.shared.browser = self
         HomeWebCache.shared.browser = self
         WebConfigFactory.passwordBridge.onOfferSave = { [weak self] offer in
@@ -522,7 +523,11 @@ final class BrowserState {
         }
     }
 
-    /// Slow waves across the whole window from the clicked passkey button.
+    /// Passkey requests currently being handled by Browsi's authenticator.
+    @ObservationIgnored private var activePasskeyCeremonies = 0
+
+    /// Cipher-grid wave across the whole window from the clicked passkey button. The grid holds while
+    /// the passkey prompt is open and clears when it finishes (see `passkeyCeremony(started:)`).
     func playCalmRipple(at pagePoint: CGPoint, in webView: WKWebView) {
         guard let content = webView.window?.contentView else { return }
         // Page coordinates (top-left) → window content coordinates (top-left).
@@ -533,10 +538,27 @@ final class BrowserState {
         calmRipple = ripple
         NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
         Task {
-            if let snap = await WindowSnapshot.capture(content: content, webView: webView), calmRipple?.id == ripple.id {
-                calmRipple?.snapshot = snap
-            }
-            try? await Task.sleep(for: .seconds(CalmRipple.duration))
+            // The button may not start a passkey request at all; then don't hold the grid.
+            try? await Task.sleep(for: .seconds(CalmRipple.requestGrace))
+            if calmRipple?.id == ripple.id, activePasskeyCeremonies == 0 { releaseCalmRipple() }
+            try? await Task.sleep(for: .seconds(CalmRipple.maximumHold))
+            if calmRipple?.id == ripple.id { releaseCalmRipple() }
+        }
+    }
+
+    /// Called when Browsi's passkey authenticator starts / finishes a request.
+    func passkeyCeremony(started: Bool) {
+        activePasskeyCeremonies = max(0, activePasskeyCeremonies + (started ? 1 : -1))
+        if !started, activePasskeyCeremonies == 0 { releaseCalmRipple() }
+    }
+
+    /// Lets the grid clear outward, then removes the overlay.
+    func releaseCalmRipple() {
+        guard let ripple = calmRipple, ripple.release == nil else { return }
+        let at = max(Date(), ripple.start.addingTimeInterval(CalmRipple.minimumHold))
+        calmRipple?.release = at
+        Task {
+            try? await Task.sleep(for: .seconds(at.timeIntervalSinceNow + CalmRipple.releaseDuration))
             if calmRipple?.id == ripple.id { calmRipple = nil }
         }
     }
