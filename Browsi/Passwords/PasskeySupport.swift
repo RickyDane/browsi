@@ -65,8 +65,13 @@ final class PasskeySupport {
         }
     }
 
+    /// Entitlements can't change while running; checked once.
+    nonisolated static let isEntitled = hasEntitlement
+
     func refresh() {
-        status = Self.map(entitled: Self.hasEntitlement, manager.authorizationStateForPlatformCredentials)
+        // The system authorization query is an XPC round trip (~60 ms); skip it when it can't matter.
+        guard Self.isEntitled else { status = .missingEntitlement; return }
+        status = Self.map(entitled: true, manager.authorizationStateForPlatformCredentials)
     }
 
     /// Shows the system "Allow Browsi to use your passkeys?" prompt if the user hasn't decided yet.

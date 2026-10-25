@@ -25,3 +25,25 @@ using namespace metal;
     c.rgb = clamp(c.rgb + half3(0.22 * wave) * c.a, half3(0.0), half3(1.0));
     return c;
 }
+
+/// Calm water ripple: slow, long waves roll outward from `origin` across the whole window.
+/// Several crests follow the front, each softer than the last; everything settles by ~2.8 s.
+[[ stitchable ]] half4 browsiCalmRipple(float2 position, SwiftUI::Layer layer, float2 origin, float time,
+                                       float amplitude, float wavelength, float speed) {
+    float2 delta = position - origin;
+    float dist = length(delta);
+    float behind = time * speed - dist;                 // how long the wave has been at this pixel (px)
+    if (behind <= 0.0) { return layer.sample(position); }
+    float k = 6.2831853 / wavelength;
+    float envelope = smoothstep(0.0, wavelength * 0.6, behind)   // soft leading edge
+                   * exp(-behind / (wavelength * 3.2))           // trailing crests fade
+                   * (1.0 - smoothstep(1.9, 2.9, time))          // whole effect settles
+                   * (1.0 / (1.0 + dist / 900.0));               // weaker far away
+    float wave = sin(k * behind) * envelope;
+    float2 n = dist > 0.001 ? delta / dist : float2(0.0);
+    float2 p = position + n * (amplitude * wave);
+    half4 c = layer.sample(p);
+    // A faint sheen on the crests only (no shading, so pages don't get grey bands).
+    c.rgb = clamp(c.rgb + half3(0.035 * max(wave, 0.0)) * c.a, half3(0.0), half3(1.0));
+    return c;
+}

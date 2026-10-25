@@ -50,6 +50,8 @@ final class BrowserState {
     @ObservationIgnored private var clickMonitor: Any?
     /// Wave-impact animation currently playing over the content card.
     var impact: LoginImpact?
+    /// Calm full-window ripple (passkey sign-in).
+    var calmRipple: CalmRipple?
 
     let library: LibraryStore
     @ObservationIgnored private var closedTabs: [(url: URL, spaceID: UUID)] = []
@@ -504,6 +506,7 @@ final class BrowserState {
 
     func playLoginImpact(_ kind: LoginImpact.Kind, at point: CGPoint, buttonSize: CGSize, in webView: WKWebView) {
         guard Preferences.shared.loginImpactAnimation else { return }
+        if kind == .passkey { playCalmRipple(at: point, in: webView); return }
         let impact = LoginImpact(kind: kind, origin: point, buttonSize: buttonSize)
         self.impact = impact
         NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .now)
@@ -516,6 +519,25 @@ final class BrowserState {
             }
             try? await Task.sleep(for: .seconds(ImpactOverlay.duration))
             if self.impact?.id == impact.id { self.impact = nil }
+        }
+    }
+
+    /// Slow waves across the whole window from the clicked passkey button.
+    func playCalmRipple(at pagePoint: CGPoint, in webView: WKWebView) {
+        guard let content = webView.window?.contentView else { return }
+        // Page coordinates (top-left) → window content coordinates (top-left).
+        let flippedY = webView.isFlipped ? pagePoint.y : webView.bounds.height - pagePoint.y
+        var p = webView.convert(CGPoint(x: pagePoint.x, y: flippedY), to: content)
+        if !content.isFlipped { p.y = content.bounds.height - p.y }
+        let ripple = CalmRipple(origin: p, tint: selectedSpace.color)
+        calmRipple = ripple
+        NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
+        Task {
+            if let snap = await WindowSnapshot.capture(content: content, webView: webView), calmRipple?.id == ripple.id {
+                calmRipple?.snapshot = snap
+            }
+            try? await Task.sleep(for: .seconds(CalmRipple.duration))
+            if calmRipple?.id == ripple.id { calmRipple = nil }
         }
     }
 

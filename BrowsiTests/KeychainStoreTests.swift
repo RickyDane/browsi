@@ -33,4 +33,14 @@ struct KeychainStoreTests {
         try store.save(Credential(host: host, username: "carol", password: "x"))
         #expect(other.accounts(host: host).isEmpty)
     }
+
+    /// Regression: another app's login-keychain entry for the same site + username blocked saving.
+    @Test func coexistsWithOtherItemsForSameSiteAndUser() throws {
+        let other = KeychainStore(label: "OtherApp-\(UUID().uuidString.prefix(6))")
+        defer { try? store.deleteAll(); try? other.deleteAll() }
+        try other.save(Credential(host: host, username: "dave", password: "theirs"))
+        try store.save(Credential(host: host, username: "dave", password: "ours"))
+        #expect(try store.password(host: host, username: "dave") == "ours")
+        #expect(try other.password(host: host, username: "dave") == "theirs")
+    }
 }

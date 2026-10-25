@@ -160,3 +160,34 @@ struct PasskeyCeremonyTests {
         }
     }
 }
+
+@MainActor
+struct PasskeySpeedTests {
+    /// Regression: calls through CredentialsContainer.prototype bypassed Browsi and waited for WebKit's timeout.
+    @Test func noPasskeyIsDeclinedQuicklyOnEveryCallPath() async throws {
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 500, height: 300), styleMask: [.titled],
+                              backing: .buffered, defer: false)
+        window.orderFront(nil)
+        defer { window.orderOut(nil) }
+        let tab = Tab(url: nil)
+        let c = TabWebController(tab: tab, delegate: nil)
+        c.webView.frame = window.contentView!.bounds
+        window.contentView!.addSubview(c.webView)
+        c.webView.loadHTMLString("<p>x</p>", baseURL: URL(string: "https://nopasskey.example.com/"))
+        for _ in 0..<100 where c.webView.isLoading || c.webView.url == nil { try? await Task.sleep(for: .milliseconds(50)) }
+        let result = try await c.webView.callAsyncJavaScript("""
+          const run = async (f) => { const s = performance.now();
+            try { await f(); return 'resolved'; } catch (e) { return e.name + '@' + Math.round(performance.now() - s) + ':' + e.message; } };
+          const opts = () => ({ publicKey: { challenge: new Uint8Array(32), rpId: 'nopasskey.example.com', timeout: 60000 } });
+          return [await run(() => navigator.credentials.get(opts())),
+                  await run(() => CredentialsContainer.prototype.get.call(navigator.credentials, opts()))];
+        """, contentWorld: .page) as? [String] ?? []
+        #expect(result.count == 2)
+        for r in result {
+            #expect(r.hasPrefix("NotAllowedError@"), "\(r)")
+            #expect(r.contains("timed out or was not allowed"), "answered by Browsi, not WebKit: \(r)")
+            let ms = Int(r.split(separator: "@")[1].split(separator: ":")[0]) ?? 99999
+            #expect(ms < 500, "declined in \(ms) ms")
+        }
+    }
+}

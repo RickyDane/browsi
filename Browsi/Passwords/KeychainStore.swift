@@ -73,6 +73,9 @@ nonisolated struct KeychainStore: Sendable {
         add[kSecAttrSynchronizable as String] = nil
         add[kSecAttrProtocol as String] = kSecAttrProtocolHTTPS
         add[kSecAttrComment as String] = "Saved by Browsi"
+        // Part of the keychain's uniqueness key for internet passwords: keeps Browsi's items from
+        // colliding (errSecDuplicateItem) with another app's entry for the same site + username.
+        add[kSecAttrSecurityDomain as String] = label
         add[kSecValueData as String] = pw
         if Self.useDataProtection {
             add[kSecAttrSynchronizable as String] = synchronizable

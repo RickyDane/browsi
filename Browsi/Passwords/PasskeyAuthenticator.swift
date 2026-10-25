@@ -309,7 +309,7 @@ final class PasskeyBridge: NSObject, WKScriptMessageHandlerWithReply {
     static let handlerName = "browsiWebAuthn"
 
     /// The built-in authenticator is used only when system passkeys (Apple's entitlement) aren't available.
-    static var isActive: Bool { !PasskeySupport.hasEntitlement }
+    static var isActive: Bool { !PasskeySupport.isEntitled }
 
     static let script: WKUserScript? = {
         guard let url = Bundle.main.url(forResource: "webauthn", withExtension: "js"),

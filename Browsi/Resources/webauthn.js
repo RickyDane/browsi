@@ -74,9 +74,12 @@
     return adopt(cred, window.PublicKeyCredential);
   };
 
-  const nativeCreate = cc.create.bind(cc), nativeGet = cc.get.bind(cc);
-
-  cc.create = function (options) {
+  // Patch the prototype (not just this instance) so code calling
+  // CredentialsContainer.prototype.get/create directly can't fall through to WebKit's native path,
+  // which without Apple's entitlement waits until the site's timeout.
+  const proto = Object.getPrototypeOf(cc);
+  const nativeCreate = proto.create.bind(cc), nativeGet = proto.get.bind(cc);
+  const browsiCreate = function (options) {
     if (!options || !options.publicKey) return nativeCreate(options);
     const pk = options.publicKey, user = pk.user || {};
     return withAbort(options.signal, call({
@@ -88,7 +91,7 @@
     }).then((r) => credential(r, 'create')));
   };
 
-  cc.get = function (options) {
+  const browsiGet = function (options) {
     if (!options || !options.publicKey) return nativeGet(options);
     // Passkey autofill isn't offered; keep conditional requests pending (until aborted).
     if (options.mediation === 'conditional') return withAbort(options.signal, new Promise(() => {}));
@@ -98,6 +101,11 @@
       allow: (pk.allowCredentials || []).map((c) => toB64u(c.id)),
     }).then((r) => credential(r, 'get')));
   };
+
+  for (const [name, fn] of [['create', browsiCreate], ['get', browsiGet]]) {
+    try { Object.defineProperty(proto, name, { value: fn, configurable: true, writable: true }); } catch (e) {}
+    try { Object.defineProperty(cc, name, { value: fn, configurable: true, writable: true }); } catch (e) {}
+  }
 
   const PKC = window.PublicKeyCredential;
   if (PKC) {

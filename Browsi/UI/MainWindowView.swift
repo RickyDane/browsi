@@ -117,6 +117,11 @@ struct MainWindowView: View {
             }
         }
         .animation(Motion.bouncy, value: browser.downloadsButtonShown)
+        .overlay {
+            if let ripple = browser.calmRipple {
+                CalmRippleOverlay(ripple: ripple).id(ripple.id)
+            }
+        }
         .animation(Motion.bouncy, value: browser.downloadsVisible)
         .animation(Motion.snappy, value: browser.palette)
         .animation(Motion.snappy, value: browser.sidebarVisible)
