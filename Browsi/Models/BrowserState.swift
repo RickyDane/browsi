@@ -169,13 +169,14 @@ final class BrowserState {
         return tab
     }
 
-    func select(_ tab: Tab) {
+    /// `closingPrevious`: the tab being left is about to close, so don't snapshot it or pop its video out.
+    func select(_ tab: Tab, closingPrevious: Bool = false) {
         let previous = selectedTab
         if tab.isInFloatingPlayer { floatingPlayer.close(returnTo: tab) }
         if previous === tab { return }
         if peek?.tab !== tab { closePeek() }
         if let space = space(of: tab), space.id != selectedSpaceID { switchSpace(to: space) }
-        if let old = previous?.controller?.webView, old.window != nil {
+        if !closingPrevious, let old = previous?.controller?.webView, old.window != nil {
             // Grab a snapshot while still on-screen; used if the tab is later suspended.
             Task { previous?.snapshot = try? await old.takeSnapshot(configuration: nil) }
         }
@@ -184,7 +185,7 @@ final class BrowserState {
         withAnimation(Motion.snappy) { space(of: tab)?.selectedTabID = tab.id }
         activate(tab)
         ExtensionManager.shared.didActivate(tab.controller, previous: previous?.controller)
-        if let previous, previous !== tab { floatingPlayer.considerPopOut(previous) }
+        if !closingPrevious, let previous, previous !== tab { floatingPlayer.considerPopOut(previous) }
         scheduleSave()
     }
 
@@ -218,6 +219,22 @@ final class BrowserState {
         let ordered = space.allTabs
         let wasSelected = space.selectedTabID == tab.id
         let idx = ordered.firstIndex { $0 === tab } ?? 0
+        // Pick the next tab *before* removing this one. Removing it first leaves `selectedTab` nil for one
+        // animated transaction, so the content card flashes to the home page and rebuilds its web view host;
+        // a web view re-attached during that rebuild stays blank.
+        if wasSelected {
+            let remaining = ordered.filter { $0 !== tab }
+            let next = Preferences.shared.closeTabSelection == .recent
+                ? remaining.max(by: { $0.lastActive < $1.lastActive })
+                : remaining.isEmpty ? nil : remaining[min(idx, remaining.count - 1)]
+            if let next {
+                let keepPrevious = previousTab
+                select(next, closingPrevious: true)
+                previousTab = keepPrevious
+            } else {
+                withAnimation(Motion.snappy) { space.selectedTabID = nil }   // shows the home page
+            }
+        }
         withAnimation(Motion.snappy) {
             space.tabs.removeAll { $0 === tab }
             space.pinnedTabs.removeAll { $0 === tab }
@@ -229,17 +246,6 @@ final class BrowserState {
         tab.controller = nil
         pageAssistants.removeValue(forKey: tab.id)?.reset()
         SmartTitleService.shared.forget(tab)
-        if wasSelected {
-            let remaining = space.allTabs
-            if remaining.isEmpty {
-                withAnimation(Motion.snappy) { space.selectedTabID = nil }   // shows the home page
-            } else if Preferences.shared.closeTabSelection == .recent,
-                      let recent = remaining.max(by: { $0.lastActive < $1.lastActive }) {
-                select(recent)
-            } else {
-                select(remaining[min(idx, remaining.count - 1)])
-            }
-        }
         scheduleSave()
     }
 
