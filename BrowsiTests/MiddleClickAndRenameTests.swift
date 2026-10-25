@@ -132,4 +132,39 @@ struct SmartRenameTests {
         #expect(name?.hasSuffix(".pdf") == true)
         #expect(name?.localizedCaseInsensitiveContains("8f3a2c91") == false)
     }
+
+    @MainActor
+    @Test(.enabled(if: SmartRenamer.status == .available, "Apple Intelligence not available"))
+    func onDeviceModelMakesTechnicalNamesFriendly() async {
+        let ctx = DownloadContext(
+            originalName: "winfer_0.1.105-75_x64.dmg", mimeType: "application/x-apple-diskimage",
+            sourceURL: URL(string: "https://github.com/winfer/winfer/releases/download/v0.1.105/winfer_0.1.105-75_x64.dmg"),
+            pageTitle: "Release v0.1.105 · winfer/winfer", pageURL: URL(string: "https://github.com/winfer/winfer/releases"))
+        let name = await SmartRenamer.suggestFileName(for: ctx)
+        print("SMART-RENAME friendly →", name ?? "nil")
+        #expect(name?.hasSuffix(".dmg") == true)
+        #expect(name?.contains("_") == false)
+        #expect(name?.localizedCaseInsensitiveContains("winfer") == true)
+        #expect(name?.contains("0.1.105") == true)
+    }
+
+    @Test func compoundExtensionsSurvive() {
+        #expect(SmartRenamer.finalName(suggested: "Ripgrep 14.1.1", original: "ripgrep-14.1.1-aarch64-apple-darwin.tar.gz")
+                == "Ripgrep 14.1.1.tar.gz")
+        #expect(SmartRenamer.finalName(suggested: "Ripgrep 14.1.1.tar.gz", original: "rg.TAR.GZ") == "Ripgrep 14.1.1.TAR.GZ")
+    }
+
+    @Test func friendlyNamesAreKept() {
+        #expect(SmartRenamer.looksFriendly("Swift Concurrency Cheat Sheet.pdf"))
+        #expect(!SmartRenamer.looksFriendly("winfer_0.1.105-75_x64.dmg"))
+        #expect(!SmartRenamer.looksFriendly("Annual Report (1).pdf"))
+        #expect(!SmartRenamer.looksFriendly("my report.pdf"))
+    }
+
+    @Test func brandNameMustSurvive() {
+        #expect(!SmartRenamer.keepsLeadingName("Ripage Version 14.1.1", original: "ripgrep-14.1.1.tar.gz"))
+        #expect(SmartRenamer.keepsLeadingName("Ripgrep 14.1.1", original: "ripgrep-14.1.1.tar.gz"))
+        #expect(SmartRenamer.keepsLeadingName("Photo 2026-10-03", original: "IMG_20261003.jpg"))
+        #expect(SmartRenamer.tidy("ripgrep-14.1.1-aarch64-apple-darwin") == "Ripgrep 14.1.1")
+    }
 }
