@@ -43,6 +43,9 @@ MainWindowView
 | `Web/FloatingPlayer.swift` | Moves a playing tab's web view into a floating `NSPanel` and restyles the video (via JS in the isolated world) to fill it. |
 | `UI/PeekOverlay.swift` | ⇧-click Link Peek modal; the peek tab is promoted to a real tab with `BrowserState.promotePeek()`. |
 | `Persistence/Preferences.swift` | Every setting, plus `UserAgent` (claims the installed Safari version so Google sign-in accepts the engine). |
+| `Web/LinkBridge.swift` | Isolated-world script that turns trusted middle-clicks on links into new tabs (WebKit doesn't navigate on middle-click). |
+| `UI/Sidebar/MiddleClickCloser.swift` | App-wide monitor + hover tracking to close sidebar tabs with the middle button. |
+| `Web/SmartRenamer.swift` | Foundation Models (`@Generable SmartFileName`) download renaming; PDF/text snippets via PDFKit; pure sanitising helpers. |
 | `Web/TabSuspender.swift` | 30 s sweep + memory-pressure source; snapshot + `interactionState`, then release. |
 | `Passwords/KeychainStore.swift` | `SecItem*` wrapper; probes the data-protection keychain, falls back to the login keychain. |
 | `Passwords/PasswordBridge.swift` + `Resources/autofill.js` | JS ↔ native messages `accounts` / `fill` / `submit` in the isolated `.defaultClient` content world. |

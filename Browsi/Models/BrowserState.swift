@@ -54,6 +54,7 @@ final class BrowserState {
         }
         suspender = TabSuspender(browser: self)
         floatingPlayer.browser = self
+        LinkBridge.shared.browser = self
         WebConfigFactory.passwordBridge.onOfferSave = { [weak self] offer in
             withAnimation(.bouncy) { self?.pendingPasswordSave = offer }
         }
@@ -61,6 +62,8 @@ final class BrowserState {
 
     func start() {
         suspender.start()
+        MiddleClickCloser.shared.install(browser: self)
+        DownloadManager.shared.browser = self
         Task {
             _ = await ContentBlocker.shared.load()
             for tab in allTabs { tab.controller?.applyContentBlocking() }

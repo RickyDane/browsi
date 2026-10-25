@@ -27,6 +27,8 @@ enum WebConfigFactory {
         let ucc = WKUserContentController()
         if let autofillScript { ucc.addUserScript(autofillScript) }
         ucc.addScriptMessageHandler(passwordBridge, contentWorld: .defaultClient, name: PasswordBridge.handlerName)
+        ucc.addUserScript(LinkBridge.script)
+        ucc.add(LinkBridge.shared, contentWorld: .defaultClient, name: LinkBridge.handlerName)
         if let list = ContentBlocker.shared.ruleList, ContentBlocker.shared.isEnabled(for: nil) { ucc.add(list) }
         config.userContentController = ucc
         return config

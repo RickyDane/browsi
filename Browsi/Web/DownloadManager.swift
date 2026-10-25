@@ -4,7 +4,9 @@ import WebKit
 /// Saves downloads into the chosen folder (default ~/Downloads), optionally asking per file.
 final class DownloadManager: NSObject, WKDownloadDelegate {
     static let shared = DownloadManager()
+    weak var browser: BrowserState?
     private var destinations: [ObjectIdentifier: URL] = [:]
+    private var contexts: [ObjectIdentifier: DownloadContext] = [:]
     private var scopedFolder: URL?
 
     /// The configured download folder (security-scoped bookmark in the sandbox).
@@ -53,6 +55,12 @@ final class DownloadManager: NSObject, WKDownloadDelegate {
             return url
         }
 
+        // Remember where it came from for smart renaming (the user didn't pick a name).
+        contexts[ObjectIdentifier(download)] = DownloadContext(
+            originalName: suggestedFilename, mimeType: response.mimeType,
+            sourceURL: download.originalRequest?.url ?? response.url,
+            pageTitle: download.webView?.title, pageURL: download.webView?.url)
+
         let dir = folder
         let base = (suggestedFilename as NSString).deletingPathExtension
         let ext = (suggestedFilename as NSString).pathExtension
@@ -67,12 +75,51 @@ final class DownloadManager: NSObject, WKDownloadDelegate {
     }
 
     func downloadDidFinish(_ download: WKDownload) {
-        if let url = destinations.removeValue(forKey: ObjectIdentifier(download)), Preferences.shared.revealDownloads {
-            NSWorkspace.shared.activateFileViewerSelecting([url])
+        let key = ObjectIdentifier(download)
+        let context = contexts.removeValue(forKey: key)
+        guard let url = destinations.removeValue(forKey: key) else { return }
+        Task {
+            var final = url
+            if let context, Preferences.shared.smartRenameDownloads {
+                final = await smartRename(url, context: context)
+            }
+            if Preferences.shared.revealDownloads { NSWorkspace.shared.activateFileViewerSelecting([final]) }
         }
     }
 
     func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
         destinations.removeValue(forKey: ObjectIdentifier(download))
+        contexts.removeValue(forKey: ObjectIdentifier(download))
+    }
+
+    /// Asks the on-device model for a better name and renames the file. Returns the final URL.
+    func smartRename(_ url: URL, context: DownloadContext) async -> URL {
+        guard SmartRenamer.status == .available else { return url }
+        var ctx = context
+        ctx.originalName = url.lastPathComponent
+        ctx.contentSnippet = await SmartRenamer.contentSnippet(of: url, mimeType: ctx.mimeType)
+        guard let name = await SmartRenamer.suggestFileName(for: ctx) else { return url }
+        let target = Self.uniqueURL(in: url.deletingLastPathComponent(), fileName: name)
+        do {
+            try FileManager.default.moveItem(at: url, to: target)
+            browser?.showToast("apple.intelligence", "Saved as “\(target.lastPathComponent)”")
+            debugLog("smart rename: \(url.lastPathComponent) → \(target.lastPathComponent)")
+            return target
+        } catch {
+            debugLog("smart rename move failed: \(error)")
+            return url
+        }
+    }
+
+    nonisolated static func uniqueURL(in dir: URL, fileName: String) -> URL {
+        let base = (fileName as NSString).deletingPathExtension
+        let ext = (fileName as NSString).pathExtension
+        var url = dir.appending(path: fileName)
+        var n = 2
+        while FileManager.default.fileExists(atPath: url.path()) {
+            url = dir.appending(path: ext.isEmpty ? "\(base) \(n)" : "\(base) \(n).\(ext)")
+            n += 1
+        }
+        return url
     }
 }

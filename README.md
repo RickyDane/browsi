@@ -10,6 +10,8 @@ A native macOS browser built with SwiftUI and WebKit: vertical tabs, Spaces, Liq
 - **Spaces**: each with its own colour, icon and animated mesh-gradient tint. Switch with ⌃1–9, ⌘⌥←/→ or a two-finger swipe on the sidebar.
 - **Floating video**: leave a tab that's playing a video and the video pops out into a floating window you can drag and resize (double-click it to go back to the tab).
 - **Link Peek**: ⇧-click a link to preview it in a glass modal. ⌘↩ opens it as a tab, Esc closes it.
+- **Middle-click**: middle-click a link to open it in a background tab (⇧ for foreground); middle-click a tab in the sidebar to close it.
+- **Smart-rename downloads**: unclear names like `file_8f3a2c91.pdf` are renamed by Apple Intelligence's on-device model (Foundation Models) from the source page and the file's text, e.g. `Acme Invoice 8823 2026-10.pdf`.
 - **Command palette** (⌘T / ⌘L / ⌘K): fuzzy search across open tabs, bookmarks, history and commands, with URL-or-search fallback.
 - **Keychain passwords**: captures logins, offers to save them as Keychain items, autofills behind Touch ID, and has a password manager in Settings.
 - **Tracker & ad blocking**: a compiled WebKit content rule list, toggled per site from the shield in the address bar.
@@ -42,6 +44,7 @@ To work in Xcode, run `xcodegen generate` and open `Browsi.xcodeproj`. The proje
 | Select space 1–9 / Next–previous space | ⌃1–9 / ⌘⌥→ ⌘⌥← |
 | New space | ⌘⇧N |
 | Link Peek / open peek as tab / close | ⇧-click / ⌘↩ / Esc |
+| Open link in new tab / close tab | Middle-click link / middle-click tab |
 | Zoom | ⌘+ / ⌘- / ⌘0 |
 
 ## Passwords & signing

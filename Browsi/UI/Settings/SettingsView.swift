@@ -406,6 +406,22 @@ private struct DownloadsPane: View {
                 }
                 Toggle("Ask where to save each file", isOn: $prefs.askWhereToSave)
             }
+            Section {
+                Toggle(isOn: $prefs.smartRenameDownloads) {
+                    Label("Smart-rename downloads with Apple Intelligence", systemImage: "apple.intelligence")
+                }
+                .disabled(SmartRenamer.status != .available)
+            } header: {
+                Text("Smart Rename")
+            } footer: {
+                switch SmartRenamer.status {
+                case .available:
+                    Text("Unclear names like “file_8f3a2c.pdf” are renamed from the source page and the file’s contents, using the on-device model. Nothing leaves your Mac. Not applied when you choose the name yourself.")
+                        .font(.caption).foregroundStyle(.secondary)
+                case .unavailable(let reason):
+                    Text(reason).font(.caption).foregroundStyle(.orange)
+                }
+            }
             Section("When Done") {
                 Toggle("Show downloaded file in Finder", isOn: $prefs.revealDownloads)
             }

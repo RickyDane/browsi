@@ -46,7 +46,7 @@ private struct PinnedTile: View {
             }
             .scaleEffect(hovering && !Motion.reduceMotion ? 1.05 : 1)
             .animation(Motion.bouncy, value: hovering)
-            .onHover { hovering = $0 }
+            .onHover { hovering = $0; MiddleClickCloser.shared.hover(tab.id, $0) }
             .onTapGesture { browser.select(tab) }
             .help(tab.displayTitle)
             .draggable(tab.id.uuidString) { DragPreview(tab: tab) }

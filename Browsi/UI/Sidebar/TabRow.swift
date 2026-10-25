@@ -72,7 +72,10 @@ struct TabRow: View {
             }
         }
         .contentShape(Rectangle())
-        .onHover { h in withAnimation(.easeOut(duration: 0.12)) { hovering = h } }
+        .onHover { h in
+            withAnimation(.easeOut(duration: 0.12)) { hovering = h }
+            MiddleClickCloser.shared.hover(tab.id, h)
+        }
         .onTapGesture { browser.select(tab) }
         .draggable(tab.id.uuidString) { DragPreview(tab: tab) }
         .contextMenu { TabContextMenu(tab: tab) }

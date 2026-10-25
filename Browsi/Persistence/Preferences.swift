@@ -122,6 +122,7 @@ final class Preferences {
     var downloadFolderBookmark: Data? { didSet { d.set(downloadFolderBookmark, forKey: "downloadFolderBookmark") } }
     var askWhereToSave: Bool { didSet { d.set(askWhereToSave, forKey: "askWhereToSave") } }
     var revealDownloads: Bool { didSet { d.set(revealDownloads, forKey: "revealDownloads") } }
+    var smartRenameDownloads: Bool { didSet { d.set(smartRenameDownloads, forKey: "smartRenameDownloads") } }
 
     // MARK: Advanced
     var userAgentMode: UserAgentMode { didSet { d.set(userAgentMode.rawValue, forKey: "userAgentMode") } }
@@ -181,6 +182,7 @@ final class Preferences {
         downloadFolderBookmark = d.data(forKey: "downloadFolderBookmark")
         askWhereToSave = bool("askWhereToSave", false)
         revealDownloads = bool("revealDownloads", true)
+        smartRenameDownloads = bool("smartRenameDownloads", true)
 
         userAgentMode = raw("userAgentMode", .safari)
         customUserAgent = d.string(forKey: "customUserAgent") ?? ""
@@ -211,6 +213,7 @@ final class Preferences {
         defaultZoom = fresh.defaultZoom; javaScriptEnabled = fresh.javaScriptEnabled
         autoplay = fresh.autoplay; minimumFontSize = fresh.minimumFontSize
         downloadFolderBookmark = nil; askWhereToSave = fresh.askWhereToSave; revealDownloads = fresh.revealDownloads
+        smartRenameDownloads = fresh.smartRenameDownloads
         userAgentMode = fresh.userAgentMode; customUserAgent = ""; webInspectorEnabled = fresh.webInspectorEnabled
     }
 }
