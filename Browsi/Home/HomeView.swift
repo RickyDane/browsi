@@ -36,12 +36,14 @@ struct HomeView: View {
             .background {
                 Color.clear.contentShape(Rectangle())
                     .onTapGesture { NSApp.keyWindow?.makeFirstResponder(nil) }
+                    .contextMenu { EditModeToggle() }
             }
             .scrollIndicators(.automatic)
         }
         .animation(Motion.smooth, value: search.phase)
+        .animation(Motion.bouncy, value: store.isEditing)
         .onAppear { HomeWebCache.shared.homeAppeared() }
-        .onDisappear { HomeWebCache.shared.homeDisappeared(); search.cancel() }
+        .onDisappear { HomeWebCache.shared.homeDisappeared(); search.cancel(); store.isEditing = false }
     }
 
     /// Search bar centred in the hero block; clock above, "Add module" and the answer below
@@ -50,6 +52,7 @@ struct HomeView: View {
         let above = Self.barHeight / 2 + 24   // header bottom sits this far above the bar's centre
         let below = Self.barHeight / 2 + 16   // answer / add button top sits this far below it
         return HomeSearchBar(search: search, query: $homeQuery)
+            .contextMenu { EditModeToggle() }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .overlay(alignment: .center) {
                 header
@@ -64,11 +67,17 @@ struct HomeView: View {
                     } else if search.phase != .idle {
                         SmartAnswerCard(search: search)
                             .transition(BlurScaleTransition(scale: 0.96, blur: 8).combined(with: .move(edge: .top)))
-                    } else {
-                        Button { showAdd = true } label: { Label("Add Module", systemImage: "plus") }
-                            .buttonStyle(.glass).controlSize(.small)
-                            .popover(isPresented: $showAdd, arrowEdge: .bottom) { AddModuleView { showAdd = false } }
-                            .transition(.opacity)
+                    } else if store.isEditing {
+                        HStack(spacing: 8) {
+                            Button { showAdd = true } label: { Label("Add Module", systemImage: "plus") }
+                                .buttonStyle(.glass).controlSize(.small)
+                                .popover(isPresented: $showAdd, arrowEdge: .bottom) { AddModuleView { showAdd = false } }
+                            Button { withAnimation(Motion.bouncy) { store.isEditing = false } } label: {
+                                Label("Done", systemImage: "checkmark")
+                            }
+                            .buttonStyle(.glassProminent).controlSize(.small)
+                        }
+                        .transition(.scale(scale: 0.8).combined(with: .opacity))
                     }
                 }
                 .frame(width: 720)
@@ -530,7 +539,7 @@ private struct ModuleCard: View {
     /// Full title bar only while the pointer is on the grab pill/bar (or dragging),
     /// so the page underneath stays clickable.
     @State private var barExpanded = false
-    private var showsChrome: Bool { hovering || isActive }
+    private var showsChrome: Bool { (hovering && HomeStore.shared.isEditing) || isActive }
 
     var body: some View {
         // Edge-to-edge page; the title bar only floats in while hovering.
@@ -590,11 +599,23 @@ private struct ModuleCard: View {
         .onChange(of: isActive) { if !$1 && !hovering { barExpanded = false } }
         .contextMenu {
             Button("Reload") { HomeWebCache.shared.reload(module.id) }
-            Button("Zoom In") { setZoom(module.zoom + 0.1) }
-            Button("Zoom Out") { setZoom(module.zoom - 0.1) }
-            Button("Rename…") { rename() }
+            if HomeStore.shared.isEditing {
+                Button("Zoom In") { setZoom(module.zoom + 0.1) }
+                Button("Zoom Out") { setZoom(module.zoom - 0.1) }
+                Button("Rename…") { rename() }
+                Divider()
+                Button("Remove", role: .destructive) { HomeStore.shared.remove(module.id) }
+            }
             Divider()
-            Button("Remove", role: .destructive) { HomeStore.shared.remove(module.id) }
+            EditModeToggle()
+        }
+        .overlay {
+            if HomeStore.shared.isEditing && !isActive {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [6, 5]))
+                    .foregroundStyle(.white.opacity(0.45))
+                    .allowsHitTesting(false)
+            }
         }
     }
 
@@ -714,7 +735,7 @@ private struct HeroBlock<Content: View>: View {
     @ViewBuilder let content: () -> Content
     @State private var hovering = false
 
-    private var showsChrome: Bool { hovering || isActive }
+    private var showsChrome: Bool { (hovering && HomeStore.shared.isEditing) || isActive }
 
     var body: some View {
         content()
@@ -764,5 +785,16 @@ private struct HeroBlock<Content: View>: View {
             .scaleEffect(isActive && !Motion.reduceMotion ? 1.02 : 1)
             .animation(Motion.snappy, value: isActive)
             .onHover { h in withAnimation(Motion.snappy) { hovering = h } }
+    }
+}
+
+/// "Turn On/Off Edit Mode" for the home page's context menus.
+struct EditModeToggle: View {
+    var body: some View {
+        let store = HomeStore.shared
+        Button(store.isEditing ? "Turn Off Edit Mode" : "Turn On Edit Mode",
+               systemImage: store.isEditing ? "checkmark.circle" : "square.and.pencil") {
+            withAnimation(Motion.bouncy) { store.isEditing.toggle() }
+        }
     }
 }

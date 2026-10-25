@@ -8,7 +8,8 @@ A native macOS browser built with SwiftUI and WebKit: vertical tabs, Spaces, Liq
 
 ## Features
 
-- **Home page** (always at the top of the sidebar, ⌘⇧H): a clock, an AI search bar and a grid of live web pages ("modules") you can drag, resize, zoom and rearrange; other modules make room as you move one. The clock + search bar block can be moved and resized on the same grid. Links navigate inside their module; ⌘-click or middle-click opens them as a tab.
+- **Space theme**: a starry night sky behind the whole browser (tinted by each space), and on the home page with random shooting stars. Toggle in Settings › Appearance.
+- **Home page** (always at the top of the sidebar, ⌘⇧H; locked until you right-click the search bar › *Turn On Edit Mode*): a clock, an AI search bar and a grid of live web pages ("modules") you can drag, resize, zoom and rearrange; other modules make room as you move one. The clock + search bar block can be moved and resized on the same grid. Links navigate inside their module; ⌘-click or middle-click opens them as a tab.
 - **Smart answers**: the home search bar answers questions with Apple Intelligence's on-device model, which can search the web, read pages and look through your history, and cites its sources ([1], [2]…). The bar shows the same suggestions as the command palette (↑/↓, ↩); ⇧↩ searches your search engine, ⌘↩ asks Apple Intelligence.
 - **Download queue**: a floating glass downloads button appears top right when a download starts (and hides after 30 s idle; toggle with ⌘J). It shows progress, and files fly into it from where you clicked. The queue offers open, reveal, cancel, retry, rename, undo rename and **Smart Rename** (Apple Intelligence) per file.
 - **Vertical tab sidebar**: pinned tiles, drag to reorder, drop a tab on the space header to pin it, hover the left edge to peek a hidden sidebar.
@@ -20,6 +21,7 @@ A native macOS browser built with SwiftUI and WebKit: vertical tabs, Spaces, Liq
 - **Wave impact**: clicking "Sign in with Apple" or a passkey button makes the page ripple like water from the click (Metal shader), with shockwave rings, sparks, a flash and a short card shake. Toned down for Reduce Motion; toggle in Settings › Appearance.
 - **Passkeys**: full WebAuthn via WebKit (iCloud Keychain, password-manager apps, iPhone via QR code, security keys, passkey autofill), once the build carries Apple's browser passkey entitlement (see below).
 - **Command palette** (⌘T / ⌘L / ⌘K): fuzzy search across open tabs, bookmarks, history and commands, with URL-or-search fallback.
+- **Import passwords from Chrome** (or Safari / Firefox CSV exports): Settings › Passwords › Import.
 - **Keychain passwords**: captures logins, offers to save them as Keychain items, autofills behind Touch ID, and has a password manager in Settings.
 - **Extensions**: turn on **Safari web extensions** installed with their apps (found automatically in Settings › Extensions), or install Chrome Web Store extensions (paste a link, use "Add" on the store page, or pick one in Settings › Extensions) or load a .crx / .zip / unpacked folder. Runs on WebKit's web extension engine (MV2 + MV3): content scripts, declarativeNetRequest, background workers, toolbar buttons with popups, options pages. Chrome extensions get a compatibility shim for Chrome-only APIs (`browsi-compat.js`). Popular picks: uBlock Origin Lite, Dark Reader, SponsorBlock, Return YouTube Dislike, Bitwarden.
 - **Tracker & ad blocking**: a compiled WebKit content rule list, toggled per site from the shield in the address bar.

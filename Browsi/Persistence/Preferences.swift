@@ -77,7 +77,10 @@ final class Preferences {
     var confirmQuit: Bool { didSet { d.set(confirmQuit, forKey: "confirmQuit") } }
 
     // MARK: Appearance
-    var theme: AppTheme { didSet { d.set(theme.rawValue, forKey: "theme"); NSApp?.appearance = theme.appearance } }
+    var theme: AppTheme { didSet { d.set(theme.rawValue, forKey: "theme"); NSApp?.appearance = effectiveAppearance } }
+    /// Space theme: starry night sky everywhere, shooting stars on the home page (always dark).
+    var spaceTheme: Bool { didSet { d.set(spaceTheme, forKey: "spaceTheme"); NSApp?.appearance = effectiveAppearance } }
+    var effectiveAppearance: NSAppearance? { spaceTheme ? NSAppearance(named: .darkAqua) : theme.appearance }
     var sidebarWidth: Double { didSet { d.set(sidebarWidth, forKey: "sidebarWidth") } }
     var tabDensity: TabDensity { didSet { d.set(tabDensity.rawValue, forKey: "tabDensity") } }
     var animatedBackground: Bool { didSet { d.set(animatedBackground, forKey: "animatedBackground") } }
@@ -147,6 +150,7 @@ final class Preferences {
         confirmQuit = bool("confirmQuit", false)
 
         theme = raw("theme", .system)
+        spaceTheme = bool("spaceTheme", true)
         sidebarWidth = dbl("sidebarWidth", 252)
         tabDensity = raw("tabDensity", .comfortable)
         animatedBackground = bool("animatedBackground", true)
@@ -205,7 +209,7 @@ final class Preferences {
         }
         let fresh = Preferences()
         searchEngine = fresh.searchEngine; restoreSession = fresh.restoreSession; homeSmartAnswers = fresh.homeSmartAnswers; confirmQuit = fresh.confirmQuit
-        theme = fresh.theme; sidebarWidth = fresh.sidebarWidth; tabDensity = fresh.tabDensity
+        theme = fresh.theme; spaceTheme = fresh.spaceTheme; sidebarWidth = fresh.sidebarWidth; tabDensity = fresh.tabDensity
         animatedBackground = fresh.animatedBackground; backgroundIntensity = fresh.backgroundIntensity
         edgeToEdgeContent = fresh.edgeToEdgeContent; reduceAnimations = fresh.reduceAnimations
         loginImpactAnimation = fresh.loginImpactAnimation

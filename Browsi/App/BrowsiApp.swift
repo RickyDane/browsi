@@ -33,7 +33,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.appearance = Preferences.shared.theme.appearance
+        NSApp.appearance = Preferences.shared.effectiveAppearance
         #if DEBUG
         if let url = ProcessInfo.processInfo.environment["BROWSI_DEBUG_FLOAT_URL"].flatMap(URL.init(string:)) {
             Task { await Self.debugFloatingScenario(url) }

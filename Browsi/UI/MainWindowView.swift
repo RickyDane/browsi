@@ -10,8 +10,13 @@ struct MainWindowView: View {
         let sidebarWidth = prefs.sidebarWidth
         let inset: CGFloat = prefs.edgeToEdgeContent ? 0 : 8
         ZStack {
-            MeshBackground(hue: space.hue, animated: prefs.animatedBackground)
-                .opacity(prefs.backgroundIntensity)
+            if prefs.spaceTheme {
+                StarfieldView(hue: space.hue, starCount: 320, animated: prefs.animatedBackground)
+                    .animation(Motion.smooth, value: space.hue)
+            } else {
+                MeshBackground(hue: space.hue, animated: prefs.animatedBackground)
+                    .opacity(prefs.backgroundIntensity)
+            }
 
             HStack(spacing: 0) {
                 if browser.sidebarVisible {
@@ -159,7 +164,13 @@ private struct ContentCard: View {
                 }
             } else {
                 // Home page: frosted card so the space's gradient glows through.
-                Rectangle().fill(.ultraThinMaterial)
+                if Preferences.shared.spaceTheme {
+                    // Home page is the night sky itself, with shooting stars.
+                    StarfieldView(hue: browser.selectedSpace.hue, starCount: 420, shootingStars: true,
+                                  animated: Preferences.shared.animatedBackground)
+                } else {
+                    Rectangle().fill(.ultraThinMaterial)
+                }
                 HomeView().id(tab?.id)
             }
         }

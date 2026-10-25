@@ -221,6 +221,12 @@ enum PaletteResults {
             PaletteItem(id: "cmd-settings", kind: .command, title: "Settings", subtitle: "", symbol: "gearshape") {
                 openSettings()
             },
+            PaletteItem(id: "cmd-edit-home", kind: .command,
+                        title: HomeStore.shared.isEditing ? "Finish Editing Home Page" : "Edit Home Page",
+                        subtitle: "", symbol: "square.and.pencil") {
+                browser.showHome()
+                withAnimation(Motion.bouncy) { HomeStore.shared.isEditing.toggle() }
+            },
             PaletteItem(id: "cmd-extensions", kind: .command, title: "Extensions", subtitle: "", symbol: "puzzlepiece.extension.fill") {
                 SettingsPane.open(.extensions)
             },

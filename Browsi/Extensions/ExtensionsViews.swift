@@ -2,35 +2,112 @@ import SwiftUI
 import UniformTypeIdentifiers
 import WebKit
 
-/// Extension buttons as their own section at the trailing end of the address bar.
-/// Shows up to `maxVisible` icons; the rest live in an overflow menu.
+/// One puzzle-piece button in the address bar; extensions live in the popup it opens.
 struct ExtensionBarSection: View {
     @Environment(BrowserState.self) private var browser
     @State private var manager = ExtensionManager.shared
-    var maxVisible = 3
+    @State private var open = false
+    @State private var anchor: CGRect = .zero
 
     var body: some View {
         let ids = manager.records.filter { $0.enabled && manager.contexts[$0.id] != nil }.map(\.id)
-        if !ids.isEmpty {
-            HStack(spacing: 2) {
-                Rectangle().fill(.primary.opacity(0.15)).frame(width: 1, height: 16).padding(.horizontal, 4)
-                ForEach(ids.prefix(maxVisible), id: \.self) { id in ExtensionActionButton(id: id) }
-                if ids.count > maxVisible {
-                    Menu {
-                        ForEach(ids.dropFirst(maxVisible), id: \.self) { id in
-                            Button(manager.displayName(id)) { manager.performAction(id) }
-                        }
-                        Divider()
-                        Button("Manage Extensions…") { SettingsPane.open(.extensions) }
-                    } label: {
-                        Image(systemName: "ellipsis").font(.system(size: 11, weight: .semibold))
+        let badges = ids.compactMap { manager.contexts[$0]?.action(for: browser.selectedTab?.controller)?.badgeText }
+            .filter { !$0.isEmpty }
+        Button { open.toggle() } label: {
+            Image(systemName: ids.isEmpty ? "puzzlepiece.extension" : "puzzlepiece.extension.fill")
+                .foregroundStyle(open ? AnyShapeStyle(browser.selectedSpace.color) : AnyShapeStyle(.secondary))
+                .overlay(alignment: .topTrailing) {
+                    if !badges.isEmpty {
+                        Circle().fill(browser.selectedSpace.color).frame(width: 6, height: 6).offset(x: 3, y: -2)
                     }
-                    .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
-                    .foregroundStyle(.secondary)
-                    .help("More extensions")
+                }
+                .symbolEffect(.bounce, value: open)
+        }
+        .buttonStyle(SquishButtonStyle()).padding(-5)
+        .help("Extensions")
+        .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) { anchor = $0 }
+        .popover(isPresented: $open, arrowEdge: .bottom) {
+            ExtensionsPopup(ids: ids) { id in
+                // Close ours first, then let the extension present its own popup from the same spot.
+                manager.actionAnchors[id] = anchor
+                open = false
+                Task {
+                    try? await Task.sleep(for: .milliseconds(180))
+                    manager.performAction(id)
                 }
             }
-            .transition(.opacity.combined(with: .scale(scale: 0.8, anchor: .trailing)))
+            .environment(browser)
+        }
+    }
+}
+
+/// The extensions popup: one row per extension (icon, name, badge); click runs its action.
+private struct ExtensionsPopup: View {
+    @Environment(BrowserState.self) private var browser
+    let ids: [UUID]
+    let run: (UUID) -> Void
+    @State private var manager = ExtensionManager.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Extensions").font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
+                .padding(.horizontal, 14).padding(.top, 12).padding(.bottom, 6)
+            if ids.isEmpty {
+                Text("No extensions turned on.").font(.system(size: 12)).foregroundStyle(.secondary)
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+            }
+            ForEach(ids, id: \.self) { id in ExtensionPopupRow(id: id) { run(id) } }
+            Divider().padding(.vertical, 6)
+            Button {
+                SettingsPane.open(.extensions)
+            } label: {
+                Label("Manage Extensions…", systemImage: "gearshape").frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(SquishButtonStyle())
+            .padding(.horizontal, 8).padding(.bottom, 8)
+        }
+        .frame(width: 260)
+    }
+}
+
+private struct ExtensionPopupRow: View {
+    @Environment(BrowserState.self) private var browser
+    let id: UUID
+    let action: () -> Void
+    @State private var manager = ExtensionManager.shared
+    @State private var hovering = false
+
+    var body: some View {
+        let _ = manager.actionRevision
+        let context = manager.contexts[id]
+        let act = context?.action(for: browser.selectedTab?.controller)
+        let icon = act?.icon(for: CGSize(width: 20, height: 20)) ?? context?.webExtension.icon(for: CGSize(width: 20, height: 20))
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Group {
+                    if let icon { Image(nsImage: icon).resizable().interpolation(.high) }
+                    else { Image(systemName: "puzzlepiece.extension.fill").foregroundStyle(.secondary) }
+                }
+                .frame(width: 20, height: 20)
+                Text(manager.displayName(id)).font(.system(size: 13)).lineLimit(1)
+                Spacer(minLength: 6)
+                if let badge = act?.badgeText, !badge.isEmpty {
+                    Text(badge).font(.system(size: 10, weight: .bold)).foregroundStyle(.white)
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(browser.selectedSpace.color, in: .capsule)
+                }
+            }
+            .padding(.horizontal, 10).frame(height: 34)
+            .background(RoundedRectangle(cornerRadius: 8).fill(.primary.opacity(hovering ? 0.08 : 0)))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 4)
+        .opacity(act?.isEnabled == false ? 0.5 : 1)
+        .onHover { hovering = $0 }
+        .contextMenu {
+            if context?.optionsPageURL != nil { Button("Options…") { manager.openOptions(id) } }
+            Button("Turn Off") { manager.setEnabled(id, false) }
         }
     }
 }

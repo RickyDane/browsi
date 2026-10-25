@@ -15,6 +15,8 @@ struct HomeModule: Identifiable, Codable, Equatable {
 final class HomeStore {
     static let shared = HomeStore()
     private(set) var modules: [HomeModule] = []
+    /// Layout changes (move/resize/add/remove) are only possible in edit mode.
+    var isEditing = false
     /// The clock + search bar block. Movable/resizable like a module; modules flow around it.
     var heroRect: GridRect = HomeStore.defaultHero
     static let defaultHero = GridRect(col: 3, row: 3, w: 6, h: 4)

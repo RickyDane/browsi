@@ -163,10 +163,14 @@ private struct AppearancePane: View {
     var body: some View {
         Form {
             Section("Theme") {
+                Toggle(isOn: $prefs.spaceTheme) {
+                    Label("Space theme: starry night sky with shooting stars", systemImage: "sparkles")
+                }
                 Picker("Appearance", selection: $prefs.theme) {
                     ForEach(AppTheme.allCases) { Text($0.name).tag($0) }
                 }
                 .pickerStyle(.segmented)
+                .disabled(prefs.spaceTheme)
             }
             Section("Sidebar") {
                 LabeledContent("Width") {
@@ -317,6 +321,7 @@ private struct PrivacyPane: View {
 private struct PasswordsPane: View {
     @Bindable private var prefs = Preferences.shared
     @State private var showVault = false
+    @State private var importError: String?
 
     var body: some View {
         Form {
@@ -326,6 +331,27 @@ private struct PasswordsPane: View {
                 } label: {
                     Label("Saved passwords live in your macOS Keychain", systemImage: "lock.shield.fill")
                 }
+            }
+            Section {
+                LabeledContent {
+                    HStack {
+                        if ChromePasswordImport.chromeURL != nil {
+                            Button("Open Chrome Export") { ChromePasswordImport.openChromeExport() }
+                        }
+                        Button("Choose File…") {
+                            importError = ChromePasswordImport.chooseAndImport(
+                                store: KeychainStore(synchronizable: prefs.syncPasswordsWithICloud))
+                        }
+                    }
+                } label: {
+                    Label("Import from Chrome", systemImage: "square.and.arrow.down.on.square.fill")
+                }
+                if let importError { Text(importError).font(.caption).foregroundStyle(.red) }
+            } header: {
+                Text("Import")
+            } footer: {
+                Text("In Chrome open Password Manager › Settings › Export passwords, then choose the saved CSV here. Exports from Safari, the Passwords app and Firefox work too.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             PasskeysSection()
             Section("AutoFill") {
