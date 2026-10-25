@@ -29,13 +29,13 @@ struct MeshBackground: View {
 
     private var colors: [Color] {
         let dark = scheme == .dark
-        let b = dark ? 0.32 : 0.98
-        let s = dark ? 0.55 : 0.35
+        let b = dark ? 0.46 : 0.98
+        let s = dark ? 0.72 : 0.42
         func c(_ dh: Double, _ db: Double = 0) -> Color {
             Color(hue: (hue + dh + 1).truncatingRemainder(dividingBy: 1), saturation: s, brightness: b + db)
         }
         return [c(0), c(0.05), c(0.1, -0.05),
-                c(-0.05), c(0.02, -0.08), c(0.08),
-                c(-0.1, -0.05), c(-0.03), c(0.04, -0.1)]
+                c(-0.05), c(0.12, -0.14), c(0.08),
+                c(-0.1, -0.05), c(-0.03), c(-0.12, -0.18)]
     }
 }

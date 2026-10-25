@@ -44,7 +44,7 @@ struct MainWindowView: View {
             }
 
             if browser.palette != .hidden {
-                Color.black.opacity(0.18)
+                Color.black.opacity(0.28)
                     .ignoresSafeArea()
                     .onTapGesture { withAnimation(Motion.snappy) { browser.palette = .hidden } }
                     .transition(.opacity)
@@ -91,7 +91,12 @@ private struct ContentCard: View {
     var body: some View {
         let tab = browser.selectedTab
         ZStack(alignment: .top) {
-            Rectangle().fill(.background)
+            if tab == nil {
+                // Empty space: let the mesh glow through a frosted card.
+                Rectangle().fill(.ultraThinMaterial)
+            } else {
+                Rectangle().fill(.background)
+            }
             if let tab {
                 ZStack {
                     WebViewHost(tab: tab)
