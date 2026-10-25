@@ -34,6 +34,7 @@ MainWindowView
 
 | File | Responsibility |
 |---|---|
+| `App/AppUpdater.swift` | Sparkle `SPUStandardUpdaterController` wrapper (`@Observable`), feed = appcast on the latest GitHub release; menu item in `AppCommands`, toggles in Settings › General. Not started under tests. |
 | `Web/PageAssistant.swift` | Page summary + Q&A: reads the page's text (isolated content world), splits it into numbered passages (`PageText`, pure), picks passages within the model's context budget (question-matching ones first), streams answers; one `PageAssistant` per tab in `BrowserState`. UI in `UI/PageAssistantPanel.swift`. |
 | `Web/FindInPage.swift`, `UI/FindBar.swift` | ⌘F find (`WKWebView.find` + a match count from the page text) and ⌘⇧F ask mode: page passages → `@Generable FindAnswer` (answer + passage numbers) → glow highlight via `PageScripts.highlight`. `PageFind` (pure) has keyword fallback and validation. One `FindInPage` in `BrowserState`. |
 | `Web/PageTranslator.swift` | Per-tab translation: language detection (`NLLanguageRecognizer` + `lang`), text-node collection/apply/restore in the isolated world, batches through a `TranslationSession` handed out by the window's `.translationTask(browser.translationConfig)`. |
@@ -113,6 +114,7 @@ MainWindowView
 - Watched pages are only checked while Browsi is running; pages that change their text on every load (live tickers) depend on the model to filter noise.
 - iCloud password sync needs signing with an Apple Development team.
 - The block list is a small curated domain list (~100 hosts), not full EasyList.
+- Release builds from CI are ad-hoc signed and not notarized (no Developer ID secrets yet). Saved passwords in the file-based keychain may ask for access again after an update because the ad-hoc signature changes.
 - History writes run on the main context (batched); move to a `@ModelActor` if it shows up in profiles.
 
 ## Roadmap ideas

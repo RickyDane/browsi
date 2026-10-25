@@ -154,6 +154,7 @@ private struct ProfilePane: View {
 
 private struct GeneralPane: View {
     @Bindable private var prefs = Preferences.shared
+    @Bindable private var updater = AppUpdater.shared
     @State private var isDefault = false
 
     var body: some View {
@@ -190,6 +191,15 @@ private struct GeneralPane: View {
             Section("Startup & Quit") {
                 Toggle("Restore spaces and tabs from last session", isOn: $prefs.restoreSession)
                 Toggle("Confirm before quitting with multiple tabs open", isOn: $prefs.confirmQuit)
+            }
+            Section("Updates") {
+                Toggle("Automatically check for updates", isOn: $updater.automaticallyChecksForUpdates)
+                Toggle("Automatically download and install updates", isOn: $updater.automaticallyDownloadsUpdates)
+                    .disabled(!updater.automaticallyChecksForUpdates)
+                LabeledContent("Version \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "–")") {
+                    Button("Check Now") { updater.checkForUpdates() }
+                        .disabled(!updater.canCheckForUpdates)
+                }
             }
         }
         .onAppear(perform: refreshDefault)

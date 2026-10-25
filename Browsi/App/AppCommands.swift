@@ -4,6 +4,11 @@ struct AppCommands: Commands {
     let browser: BrowserState
 
     var body: some Commands {
+        CommandGroup(after: .appInfo) {
+            Button("Check for Updates…") { AppUpdater.shared.checkForUpdates() }
+                .disabled(!AppUpdater.shared.canCheckForUpdates)
+        }
+
         CommandGroup(replacing: .newItem) {
             Button("New Tab") { browser.palette = .newTab }.keyboardShortcut("t")
             Button("Home") { browser.showHome() }.keyboardShortcut("h", modifiers: [.command, .shift])

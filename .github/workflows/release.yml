@@ -1,0 +1,105 @@
+name: Build & Release
+
+on:
+  push:
+    branches: [master]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  DERIVED_DATA: build
+  SPARKLE_BIN: build/SourcePackages/artifacts/sparkle/Sparkle/bin
+
+jobs:
+  build:
+    name: Build & test
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          sudo xcode-select -s "$(ls -d /Applications/Xcode_[0-9]*.app | grep -v -i beta | sort -V | tail -1)"
+          xcodebuild -version
+
+      - name: Install tools
+        run: |
+          brew install xcodegen
+          xcodebuild -downloadComponent MetalToolchain
+
+      - name: Version
+        id: version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="0.0.0-dev"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "build=${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate project
+        run: xcodegen generate
+
+      - name: Test
+        run: |
+          set -o pipefail
+          xcodebuild test -scheme Browsi -destination 'platform=macOS' \
+            -derivedDataPath "$DERIVED_DATA" | tee test.log | grep -aE "error: |Test run with|\*\* TEST "
+
+      - name: Build Release
+        run: |
+          set -o pipefail
+          xcodebuild build -scheme Browsi -configuration Release -destination 'platform=macOS' \
+            -derivedDataPath "$DERIVED_DATA" \
+            MARKETING_VERSION="${{ steps.version.outputs.version }}" \
+            CURRENT_PROJECT_VERSION="${{ steps.version.outputs.build }}" \
+            | tee build.log | grep -aE "error: |warning: |\*\* BUILD "
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          ditto -c -k --sequesterRsrc --keepParent \
+            "$DERIVED_DATA/Build/Products/Release/Browsi.app" \
+            "dist/Browsi-${{ steps.version.outputs.version }}.zip"
+
+      - name: Generate appcast
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          echo "$SPARKLE_PRIVATE_KEY" | "$SPARKLE_BIN/generate_appcast" --ed-key-file - \
+            --download-url-prefix "https://github.com/${{ github.repository }}/releases/download/${GITHUB_REF_NAME}/" \
+            --link "https://github.com/${{ github.repository }}/releases/tag/${GITHUB_REF_NAME}" \
+            --maximum-versions 1 \
+            -o dist/appcast.xml dist
+          cat dist/appcast.xml
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Browsi-${{ steps.version.outputs.version }}
+          path: dist/
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: logs
+          path: "*.log"
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/*.zip dist/appcast.xml \
+            --title "Browsi ${{ steps.version.outputs.version }}" --generate-notes \
+            $([[ "$GITHUB_REF_NAME" == *-* ]] && echo --prerelease)

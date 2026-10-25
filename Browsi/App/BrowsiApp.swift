@@ -35,6 +35,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.appearance = Preferences.shared.effectiveAppearance
         Preferences.shared.appIcon.apply()
+        _ = AppUpdater.shared
         #if DEBUG
         if let url = ProcessInfo.processInfo.environment["BROWSI_DEBUG_FLOAT_URL"].flatMap(URL.init(string:)) {
             Task { await Self.debugFloatingScenario(url) }

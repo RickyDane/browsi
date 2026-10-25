@@ -103,6 +103,26 @@ To enable passkeys:
 
 Team signing also moves saved passwords to the data-protection keychain and makes the iCloud sync toggle work.
 
+## Releases & updates
+
+`.github/workflows/release.yml` builds and tests every push and pull request. Pushing a tag `vX.Y.Z` also builds a
+Release app (version from the tag, build number from the run number), zips it, signs an `appcast.xml` with Sparkle's
+EdDSA key (repo secret `SPARKLE_PRIVATE_KEY`) and publishes both as a GitHub release. Tags with a `-` (e.g. `v1.0.0-beta1`)
+become pre-releases, which the updater ignores.
+
+```sh
+git tag v0.2.0 && git push origin v0.2.0
+```
+
+The app updates itself with [Sparkle 2](https://sparkle-project.org): it reads
+`https://github.com/RickyDane/browsi/releases/latest/download/appcast.xml`, verifies the archive against `SUPublicEDKey`
+in `Info.plist`, and installs through Sparkle's sandbox-safe installer service. Browsi › **Check for Updates…**, or
+Settings › General › Updates. The private key also lives in the login keychain of the Mac that created it
+(`generate_keys -x key.txt` exports it); losing it means existing installs can't verify new updates.
+
+CI builds are ad-hoc signed and not notarized, so the first download needs right-click › Open (or
+`xattr -dr com.apple.quarantine Browsi.app`); updates installed by Sparkle afterwards aren't quarantined.
+
 ## Further reading
 
 - [INFO.md](INFO.md): architecture, data flow, status and roadmap.

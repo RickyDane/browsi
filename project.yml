@@ -4,12 +4,19 @@ options:
   deploymentTarget:
     macOS: "26.0"
   createIntermediateGroups: true
+packages:
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: 2.10.1
 settings:
   base:
     SWIFT_VERSION: "6.0"
     SWIFT_STRICT_CONCURRENCY: complete
     MACOSX_DEPLOYMENT_TARGET: "26.0"
     ENABLE_HARDENED_RUNTIME: YES
+    # Overridden by CI from the release tag (vX.Y.Z) and run number.
+    MARKETING_VERSION: 0.1.0
+    CURRENT_PROJECT_VERSION: 1
 targets:
   Browsi:
     type: application
@@ -21,6 +28,8 @@ targets:
       - path: Browsi
         excludes:
           - "Resources/*.entitlements"
+    dependencies:
+      - package: Sparkle
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.perlick.browsi
