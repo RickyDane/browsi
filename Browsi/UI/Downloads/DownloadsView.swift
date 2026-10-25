@@ -1,14 +1,17 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Sidebar button: shows overall progress, bounces when a download lands, opens the queue.
+/// Floating glass button (top right): progress ring, bounces when a download lands, opens the queue.
 struct DownloadsButton: View {
     @Environment(BrowserState.self) private var browser
     @State private var manager = DownloadManager.shared
     @State private var landed = false
 
     var body: some View {
-        Button { withAnimation(Motion.bouncy) { browser.downloadsVisible.toggle() } } label: {
+        Button {
+            if browser.downloadsVisible { browser.closeDownloadsPanel() }
+            else { withAnimation(Motion.bouncy) { browser.downloadsVisible = true } }
+        } label: {
             ZStack {
                 if let p = manager.overallProgress {
                     Circle().stroke(.primary.opacity(0.12), lineWidth: 2.5)
@@ -17,13 +20,15 @@ struct DownloadsButton: View {
                         .rotationEffect(.degrees(-90))
                         .animation(.easeOut(duration: 0.25), value: p)
                 }
-                Image(systemName: manager.activeCount > 0 ? "arrow.down" : "arrow.down.circle")
-                    .font(.system(size: manager.activeCount > 0 ? 10 : 14, weight: .semibold))
+                Image(systemName: "arrow.down")
+                    .font(.system(size: 13, weight: .bold))
                     .contentTransition(.symbolEffect(.replace))
                     .symbolEffect(.bounce, value: browser.downloadsBounce)
             }
-            .frame(width: 22, height: 22)
-            .foregroundStyle(manager.activeCount > 0 ? AnyShapeStyle(browser.selectedSpace.color) : AnyShapeStyle(.secondary))
+            .frame(width: 24, height: 24)
+            .foregroundStyle(manager.activeCount > 0 ? AnyShapeStyle(browser.selectedSpace.color) : AnyShapeStyle(.primary))
+            .frame(width: 38, height: 38)
+            .contentShape(Circle())
             .background {
                 // Shockwave when a flying file lands.
                 Circle().stroke(browser.selectedSpace.color, lineWidth: 2)
@@ -31,9 +36,20 @@ struct DownloadsButton: View {
                     .opacity(landed ? 0 : 0.9)
             }
         }
-        .buttonStyle(SquishButtonStyle())
-        .padding(-4)
-        .help("Downloads")
+        .buttonStyle(SquishButtonStyle(hoverBackground: false))
+        .padding(-6)
+        .glassEffect(.regular.interactive(), in: .circle)
+        .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
+        .overlay(alignment: .topTrailing) {
+            if manager.activeCount > 1 {
+                Text("\(manager.activeCount)").font(.system(size: 9, weight: .bold)).foregroundStyle(.white)
+                    .padding(.horizontal, 4).frame(minWidth: 15, minHeight: 15)
+                    .background(browser.selectedSpace.color, in: .capsule)
+                    .offset(x: 3, y: -3)
+            }
+        }
+        .onHover { browser.downloadsHovering = $0 }
+        .help("Downloads (⌘J)")
         .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) { browser.downloadsButtonFrame = $0 }
         .onDisappear { browser.downloadsButtonFrame = nil }
         .onChange(of: browser.downloadsBounce) {
@@ -281,32 +297,24 @@ struct ArcFlight: ViewModifier, Animatable {
     }
 }
 
-/// Hosts the downloads queue as a glass card growing out of the sidebar's downloads button.
+/// Hosts the downloads queue as a glass card dropping down from the floating downloads button.
 struct DownloadsPanelLayer: View {
     @Environment(BrowserState.self) private var browser
 
     var body: some View {
         GeometryReader { geo in
             let origin = geo.frame(in: .global).origin
-            let fallback = CGRect(x: 14, y: geo.size.height - 36, width: 22, height: 22)
+            let fallback = CGRect(x: geo.size.width - 54, y: 16, width: 38, height: 38)
             let button = browser.downloadsButtonFrame?.offsetBy(dx: -origin.x, dy: -origin.y) ?? fallback
-            ZStack(alignment: .bottomLeading) {
+            ZStack(alignment: .topTrailing) {
                 Color.black.opacity(0.001)
-                    .onTapGesture(perform: dismiss)
+                    .onTapGesture { browser.closeDownloadsPanel() }
                 DownloadsQueueView()
                     .fixedSize()
-                    .padding(.leading, max(8, button.minX - 6))
-                    .padding(.bottom, max(8, geo.size.height - button.minY + 10))
-                    .transition(transition)
+                    .padding(.trailing, max(8, geo.size.width - button.maxX))
+                    .padding(.top, button.maxY + 10)
+                    .transition(.scale(scale: 0.6, anchor: .topTrailing).combined(with: .opacity))
             }
         }
-    }
-
-    private var transition: AnyTransition {
-        .scale(scale: 0.6, anchor: .bottomLeading).combined(with: .opacity)
-    }
-
-    private func dismiss() {
-        withAnimation(Motion.snappy) { browser.downloadsVisible = false }
     }
 }

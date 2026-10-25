@@ -143,6 +143,7 @@ final class DownloadManager: NSObject, WKDownloadDelegate {
     func downloadDidFinish(_ download: WKDownload) {
         guard let item = byDownload.removeValue(forKey: ObjectIdentifier(download)) else { return }
         item.progressObservation = nil
+        browser?.noteDownloadActivity()
         withAnimation(Motion.snappy) {
             item.state = .finished
             item.progress = 1
@@ -161,6 +162,7 @@ final class DownloadManager: NSObject, WKDownloadDelegate {
     func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
         guard let item = byDownload.removeValue(forKey: ObjectIdentifier(download)) else { return }
         item.progressObservation = nil
+        browser?.noteDownloadActivity()
         let cancelled = (error as NSError).code == NSURLErrorCancelled
         withAnimation(Motion.snappy) { item.state = cancelled ? .cancelled : .failed(error.localizedDescription) }
         scheduleSave()

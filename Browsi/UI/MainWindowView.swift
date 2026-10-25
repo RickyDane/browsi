@@ -92,7 +92,7 @@ struct MainWindowView: View {
             GeometryReader { geo in
                 let origin = geo.frame(in: .global).origin
                 let target = browser.downloadsButtonFrame.map { CGPoint(x: $0.midX - origin.x, y: $0.midY - origin.y) }
-                    ?? CGPoint(x: 26, y: geo.size.height - 26)
+                    ?? CGPoint(x: geo.size.width - 35, y: 35)
                 ForEach(browser.downloadFlights) { flight in
                     DownloadFlightView(flight: flight, target: target)
                 }
@@ -103,6 +103,15 @@ struct MainWindowView: View {
             // Downloads queue: a glass card that grows out of the downloads button (no popover arrow).
             if browser.downloadsVisible { DownloadsPanelLayer() }
         }
+        .overlay(alignment: .topTrailing) {
+            if browser.downloadsButtonShown {
+                DownloadsButton()
+                    .padding(.top, 16)
+                    .padding(.trailing, 18)
+                    .transition(.scale(scale: 0.3, anchor: .center).combined(with: .opacity))
+            }
+        }
+        .animation(Motion.bouncy, value: browser.downloadsButtonShown)
         .animation(Motion.bouncy, value: browser.downloadsVisible)
         .animation(Motion.snappy, value: browser.palette)
         .animation(Motion.snappy, value: browser.sidebarVisible)

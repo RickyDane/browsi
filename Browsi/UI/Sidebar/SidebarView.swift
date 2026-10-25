@@ -78,15 +78,9 @@ struct SidebarView: View {
             .transition(.push(from: browser.spaceSwitchDirection > 0 ? .trailing : .leading))
             .offset(x: swipe.offset)
 
-            HStack {
-                DownloadsButton()
-                Spacer(minLength: 4)
-                SpaceSwitcher()
-                Spacer(minLength: 4)
-                Color.clear.frame(width: 22, height: 22)
-            }
-            .padding(.horizontal, 4)
-            .padding(.bottom, 10)
+            SpaceSwitcher()
+                .frame(maxWidth: .infinity)
+                .padding(.bottom, 10)
         }
         .padding(.horizontal, 10)
         .clipped()

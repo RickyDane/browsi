@@ -184,6 +184,32 @@ struct DownloadQueueTests {
         manager.reset()
     }
 
+    @Test func downloadsButtonShowsOnActivityAndHidesWhenIdle() async {
+        let browser = BrowserState(library: LibraryStore(inMemory: true), restore: false)
+        #expect(!browser.downloadsButtonShown, "hidden by default")
+        browser.noteDownloadActivity()
+        #expect(browser.downloadsButtonShown)
+        browser.scheduleDownloadsAutoHide(after: .milliseconds(150))
+        try? await Task.sleep(for: .milliseconds(400))
+        #expect(!browser.downloadsButtonShown, "hides after the idle timeout")
+
+        // Hovering (or an open panel) keeps it visible.
+        browser.noteDownloadActivity()
+        browser.downloadsHovering = true
+        browser.scheduleDownloadsAutoHide(after: .milliseconds(100))
+        try? await Task.sleep(for: .milliseconds(300))
+        #expect(browser.downloadsButtonShown)
+        browser.downloadsHovering = false
+    }
+
+    @Test func commandJTogglesQueue() {
+        let browser = BrowserState(library: LibraryStore(inMemory: true), restore: false)
+        browser.toggleDownloads()
+        #expect(browser.downloadsButtonShown && browser.downloadsVisible)
+        browser.toggleDownloads()
+        #expect(!browser.downloadsButtonShown && !browser.downloadsVisible)
+    }
+
     @Test func downloadFliesFromLastClickAndBouncesButton() {
         let browser = BrowserState(library: LibraryStore(inMemory: true), restore: false)
         browser.recordClick(at: CGPoint(x: 640, y: 320))

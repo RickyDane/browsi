@@ -33,8 +33,15 @@ final class BrowserState {
     var downloadFlights: [DownloadFlight] = []
     /// Global frame of the sidebar's downloads button (nil while hidden).
     var downloadsButtonFrame: CGRect?
-    /// Downloads queue panel (anchored above the sidebar's downloads button).
+    /// Downloads queue panel (drops down from the floating downloads button).
     var downloadsVisible = false
+    /// The floating downloads button (top right). Hidden by default; appears on download activity.
+    var downloadsButtonShown = false
+    var downloadsHovering = false {
+        didSet { if !downloadsHovering { scheduleDownloadsAutoHide() } }
+    }
+    @ObservationIgnored private var downloadsHideTask: Task<Void, Never>?
+    static let downloadsIdleTimeout: Duration = .seconds(30)
     /// Bumped to ask the home page to focus its search bar (⌘L on the home page).
     var homeSearchFocusRequest = 0
     /// Bumped when a flight lands, to bounce the button.
@@ -388,6 +395,44 @@ final class BrowserState {
         scheduleSave()
     }
 
+    // MARK: Downloads button
+
+    /// A download started/finished: show the button and restart the 30 s idle timer.
+    func noteDownloadActivity() {
+        if !downloadsButtonShown { withAnimation(Motion.bouncy) { downloadsButtonShown = true } }
+        scheduleDownloadsAutoHide()
+    }
+
+    /// ⌘J: open the queue (showing the button) or close it and hide the button.
+    func toggleDownloads() {
+        if downloadsVisible {
+            withAnimation(Motion.snappy) { downloadsVisible = false; downloadsButtonShown = false }
+            downloadsHideTask?.cancel()
+        } else {
+            withAnimation(Motion.bouncy) { downloadsButtonShown = true; downloadsVisible = true }
+        }
+    }
+
+    func closeDownloadsPanel() {
+        withAnimation(Motion.snappy) { downloadsVisible = false }
+        scheduleDownloadsAutoHide()
+    }
+
+    /// Hides the button after 30 s without activity. Never while downloading, open or hovered.
+    func scheduleDownloadsAutoHide(after delay: Duration = BrowserState.downloadsIdleTimeout) {
+        downloadsHideTask?.cancel()
+        guard downloadsButtonShown else { return }
+        downloadsHideTask = Task { [weak self] in
+            try? await Task.sleep(for: delay)
+            guard let self, !Task.isCancelled else { return }
+            if DownloadManager.shared.activeCount > 0 || self.downloadsVisible || self.downloadsHovering {
+                self.scheduleDownloadsAutoHide(after: delay)
+                return
+            }
+            withAnimation(Motion.smooth) { self.downloadsButtonShown = false }
+        }
+    }
+
     // MARK: Download flights
 
     /// Remembers where the user last clicked in the browser window (top-left origin), so a download
@@ -405,6 +450,7 @@ final class BrowserState {
     func recordClick(at point: CGPoint) { lastClick = (point, .now) }
 
     func launchDownloadFlight(for fileName: String) {
+        noteDownloadActivity()
         let from: CGPoint
         if let click = lastClick, Date.now.timeIntervalSince(click.time) < 10 {
             from = click.point

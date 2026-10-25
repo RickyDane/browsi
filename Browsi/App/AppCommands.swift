@@ -19,6 +19,7 @@ struct AppCommands: Commands {
         CommandGroup(after: .sidebar) {
             Button("Toggle Sidebar") { withAnimation(Motion.snappy) { browser.sidebarVisible.toggle() } }
                 .keyboardShortcut("s")
+            Button("Downloads") { browser.toggleDownloads() }.keyboardShortcut("j")
             Divider()
             Button("Reload Page") { browser.selectedTab?.controller?.webView.reload() }.keyboardShortcut("r")
             Button("Reload Ignoring Cache") { browser.selectedTab?.controller?.webView.reloadFromOrigin() }
