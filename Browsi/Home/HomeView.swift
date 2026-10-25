@@ -159,6 +159,11 @@ private struct HomeSearchBar: View {
         .animation(Motion.bouncy, value: focused)
         .animation(Motion.snappy, value: query.isEmpty)
         .onAppear { DispatchQueue.main.async { focused = true } }
+        .onChange(of: browser.homeSearchFocusRequest) {
+            // Re-trigger even if already focused so the focus animation plays.
+            focused = false
+            DispatchQueue.main.async { focused = true }
+        }
         .onChange(of: query) { if $1.isEmpty { search.reset() } }
     }
 

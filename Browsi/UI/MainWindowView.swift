@@ -99,6 +99,11 @@ struct MainWindowView: View {
             }
             .allowsHitTesting(false)
         }
+        .overlay {
+            // Downloads queue: a glass card that grows out of the downloads button (no popover arrow).
+            if browser.downloadsVisible { DownloadsPanelLayer() }
+        }
+        .animation(Motion.bouncy, value: browser.downloadsVisible)
         .animation(Motion.snappy, value: browser.palette)
         .animation(Motion.snappy, value: browser.sidebarVisible)
         .animation(Motion.snappy, value: prefs.sidebarWidth)

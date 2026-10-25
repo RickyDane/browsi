@@ -33,6 +33,10 @@ final class BrowserState {
     var downloadFlights: [DownloadFlight] = []
     /// Global frame of the sidebar's downloads button (nil while hidden).
     var downloadsButtonFrame: CGRect?
+    /// Downloads queue panel (anchored above the sidebar's downloads button).
+    var downloadsVisible = false
+    /// Bumped to ask the home page to focus its search bar (⌘L on the home page).
+    var homeSearchFocusRequest = 0
     /// Bumped when a flight lands, to bounce the button.
     var downloadsBounce = 0
     @ObservationIgnored private var lastClick: (point: CGPoint, time: Date)?
@@ -221,6 +225,16 @@ final class BrowserState {
     /// Opens a link chosen on the home page: replaces the selected home tab, otherwise opens a tab.
     func openFromHome(_ url: URL, background: Bool = false) {
         newTab(url: url, background: background)
+    }
+
+    /// ⌘L: edit the address, or focus the home search bar when the home page is showing.
+    func focusAddress() {
+        if selectedTab == nil {
+            palette = .hidden
+            homeSearchFocusRequest += 1
+        } else {
+            palette = .editCurrent
+        }
     }
 
     /// Shows the space's home page (deselects the current tab; the tab keeps running).

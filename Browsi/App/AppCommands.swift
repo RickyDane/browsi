@@ -7,7 +7,7 @@ struct AppCommands: Commands {
         CommandGroup(replacing: .newItem) {
             Button("New Tab") { browser.palette = .newTab }.keyboardShortcut("t")
             Button("Home") { browser.showHome() }.keyboardShortcut("h", modifiers: [.command, .shift])
-            Button("Open Location…") { browser.palette = .editCurrent }.keyboardShortcut("l")
+            Button("Open Location…") { browser.focusAddress() }.keyboardShortcut("l")
             Button("Command Palette…") { browser.palette = .newTab }.keyboardShortcut("k")
             Button("Reopen Closed Tab") { browser.reopenClosedTab() }.keyboardShortcut("t", modifiers: [.command, .shift])
             Divider()

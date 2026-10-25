@@ -5,11 +5,10 @@ import UniformTypeIdentifiers
 struct DownloadsButton: View {
     @Environment(BrowserState.self) private var browser
     @State private var manager = DownloadManager.shared
-    @State private var showQueue = false
     @State private var landed = false
 
     var body: some View {
-        Button { showQueue.toggle() } label: {
+        Button { withAnimation(Motion.bouncy) { browser.downloadsVisible.toggle() } } label: {
             ZStack {
                 if let p = manager.overallProgress {
                     Circle().stroke(.primary.opacity(0.12), lineWidth: 2.5)
@@ -40,10 +39,6 @@ struct DownloadsButton: View {
         .onChange(of: browser.downloadsBounce) {
             landed = false
             withAnimation(.easeOut(duration: Motion.reduceMotion ? 0.01 : 0.55)) { landed = true }
-        }
-        .popover(isPresented: $showQueue, arrowEdge: .trailing) {
-            DownloadsQueueView()
-                .environment(browser)
         }
     }
 }
@@ -89,6 +84,8 @@ struct DownloadsQueueView: View {
             }
         }
         .frame(width: 380)
+        .glassEffect(.regular, in: .rect(cornerRadius: 18, style: .continuous))
+        .shadow(color: .black.opacity(0.25), radius: 30, y: 12)
     }
 }
 
@@ -281,5 +278,35 @@ struct ArcFlight: ViewModifier, Animatable {
             .rotationEffect(.degrees(Double(-30 * t)))
             .opacity(t > 0.9 ? Double((1 - t) / 0.1) : 1)
             .position(p)
+    }
+}
+
+/// Hosts the downloads queue as a glass card growing out of the sidebar's downloads button.
+struct DownloadsPanelLayer: View {
+    @Environment(BrowserState.self) private var browser
+
+    var body: some View {
+        GeometryReader { geo in
+            let origin = geo.frame(in: .global).origin
+            let fallback = CGRect(x: 14, y: geo.size.height - 36, width: 22, height: 22)
+            let button = browser.downloadsButtonFrame?.offsetBy(dx: -origin.x, dy: -origin.y) ?? fallback
+            ZStack(alignment: .bottomLeading) {
+                Color.black.opacity(0.001)
+                    .onTapGesture(perform: dismiss)
+                DownloadsQueueView()
+                    .fixedSize()
+                    .padding(.leading, max(8, button.minX - 6))
+                    .padding(.bottom, max(8, geo.size.height - button.minY + 10))
+                    .transition(transition)
+            }
+        }
+    }
+
+    private var transition: AnyTransition {
+        .scale(scale: 0.6, anchor: .bottomLeading).combined(with: .opacity)
+    }
+
+    private func dismiss() {
+        withAnimation(Motion.snappy) { browser.downloadsVisible = false }
     }
 }
