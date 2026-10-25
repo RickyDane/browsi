@@ -11,7 +11,7 @@ struct WebViewHost: NSViewRepresentable {
 
     init(tab: Tab, claim: Bool = true) {
         webView = tab.controller?.webView
-        self.claim = claim && !tab.isInFloatingPlayer
+        self.claim = claim && !tab.isInFloatingPlayer && !tab.isInElementFullscreen
     }
 
     func makeNSView(context: Context) -> HostView { HostView() }
@@ -23,6 +23,9 @@ struct WebViewHost: NSViewRepresentable {
             return
         }
         guard webView.superview !== container else { return }
+        // In element fullscreen WebKit hosts the web view in its own window. Pulling it back here
+        // would leave the fullscreen window showing a dead frame that ignores clicks.
+        guard webView.fullscreenState == .notInFullscreen else { return }
         container.subviews.forEach { $0.removeFromSuperview() }
         webView.removeFromSuperview()
         webView.frame = container.bounds

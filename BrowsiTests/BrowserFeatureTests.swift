@@ -52,4 +52,20 @@ struct BrowserFeatureTests {
         tab.isInFloatingPlayer = true
         #expect(!browser.suspender.shouldSuspend(tab, selected: nil, force: true, threshold: 0, now: .now))
     }
+
+    @Test func controlTabTogglesBetweenLastTwoTabs() {
+        let browser = BrowserState(library: LibraryStore(inMemory: true), restore: false)
+        let a = browser.newTab(url: URL(string: "https://a.example")!)
+        let b = browser.newTab(url: URL(string: "https://b.example")!)
+        let c = browser.newTab(url: URL(string: "https://c.example")!)
+        browser.select(a)
+        browser.selectPreviousTab()
+        #expect(browser.selectedTab === c)
+        browser.selectPreviousTab()
+        #expect(browser.selectedTab === a)
+        browser.close(c)
+        browser.select(b)
+        browser.selectPreviousTab()
+        #expect(browser.selectedTab === a)
+    }
 }

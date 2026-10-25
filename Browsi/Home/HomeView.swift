@@ -368,7 +368,7 @@ private struct SmartAnswerCard: View {
     }
 }
 
-private struct ShimmerLines: View {
+struct ShimmerLines: View {
     @State private var phase = false
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {

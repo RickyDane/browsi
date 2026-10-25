@@ -34,6 +34,9 @@ enum WebConfigFactory {
             ucc.addScriptMessageHandler(PasskeyBridge.shared, contentWorld: .page, name: PasskeyBridge.handlerName)
         }
         ucc.addUserScript(LoginImpactBridge.script)
+        ucc.addUserScript(AppleSignInBridge.script)
+        ucc.addScriptMessageHandler(AppleSignInBridge.shared, contentWorld: .defaultClient,
+                                    name: AppleSignInBridge.handlerName)
         ucc.add(LoginImpactBridge.shared, contentWorld: .defaultClient, name: LoginImpactBridge.handlerName)
         ucc.add(LinkBridge.shared, contentWorld: .defaultClient, name: LinkBridge.handlerName)
         if let list = ContentBlocker.shared.ruleList, ContentBlocker.shared.isEnabled(for: nil) { ucc.add(list) }

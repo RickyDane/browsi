@@ -26,9 +26,23 @@ struct MainWindowView: View {
                         .transition(.move(edge: .leading).combined(with: .opacity))
                 }
                 ContentCard(edgeToEdge: prefs.edgeToEdgeContent)
+                    .overlay(alignment: .top) {
+                        if browser.find.visible, browser.selectedWebTab != nil {
+                            FindBar(find: browser.find)
+                                .padding(.top, 12)
+                                .transition(.move(edge: .top).combined(with: .opacity).combined(with: BlurScaleTransition()))
+                        }
+                    }
+                    .animation(Motion.snappy, value: browser.find.visible)
                     .padding(.vertical, inset)
                     .padding(.trailing, inset)
                     .padding(.leading, browser.sidebarVisible ? 0 : inset)
+                if browser.pageAssistantVisible {
+                    PageAssistantPanel()
+                        .padding(.vertical, max(inset, 8))
+                        .padding(.trailing, max(inset, 8))
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                }
             }
 
             if !browser.sidebarVisible {
@@ -53,6 +67,27 @@ struct MainWindowView: View {
 
             if let peek = browser.peek {
                 PeekOverlay(peek: peek)
+                    .transition(BlurScaleTransition(scale: 0.94, blur: 8))
+                    .zIndex(9)
+            }
+
+            if let run = browser.pageAction {
+                PageActionSheet(run: run)
+                    .id(run.id)
+                    .transition(.opacity)
+                    .zIndex(9)
+            }
+
+            if let setup = browser.watchSetup {
+                WatchSetupSheet(setup: setup)
+                    .id(setup.id)
+                    .transition(.opacity)
+                    .zIndex(9)
+            }
+
+            if let sheet = browser.appleSignIn, browser.selectedTab === sheet.source {
+                AppleSignInSheet(sheet: sheet)
+                    .id(sheet.id)
                     .transition(BlurScaleTransition(scale: 0.94, blur: 8))
                     .zIndex(9)
             }
@@ -113,7 +148,7 @@ struct MainWindowView: View {
             if browser.downloadsButtonShown {
                 DownloadsButton()
                     .padding(.top, 16)
-                    .padding(.trailing, 18)
+                    .padding(.trailing, 18 + (browser.pageAssistantVisible ? PageAssistantPanel.width + 8 : 0))
                     .transition(.scale(scale: 0.3, anchor: .center).combined(with: .opacity))
             }
         }
@@ -126,11 +161,19 @@ struct MainWindowView: View {
         .animation(Motion.bouncy, value: browser.downloadsVisible)
         .animation(Motion.snappy, value: browser.palette)
         .animation(Motion.snappy, value: browser.sidebarVisible)
+        .animation(Motion.bouncy, value: browser.pageAssistantVisible)
         .animation(Motion.snappy, value: prefs.sidebarWidth)
         .frame(minWidth: 720, minHeight: 480)
         .ignoresSafeArea()
         .background(WindowConfigurator(showTrafficLights: browser.sidebarVisible || sidebarPeek))
         .onChange(of: browser.sidebarVisible) { if $1 { sidebarPeek = false } }
+        .onChange(of: browser.selectedTab?.id) {
+            browser.find.pageChanged(browser.selectedTab)
+            PageWatcher.shared.markSeen(browser.selectedTab?.url)
+        }
+        .translationTask(browser.translationConfig) { session in
+            await browser.runTranslation(with: session)
+        }
     }
 }
 
@@ -146,7 +189,16 @@ private struct ContentCard: View {
         ZStack(alignment: .top) {
             if let tab, !tab.isHome {
                 Rectangle().fill(.background)
-                WebViewHost(tab: tab)
+                // During in-place Apple sign-in the tab's web view lives in the sheet; the site stays frozen here.
+                let signIn = browser.appleSignIn
+                let inSheet = signIn?.mode == .inPlace && signIn?.tab === tab
+                WebViewHost(tab: tab, claim: !inSheet)
+                if inSheet, let backdrop = signIn?.background {
+                    Image(nsImage: backdrop).resizable().aspectRatio(contentMode: .fill)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                        .clipped()
+                        .allowsHitTesting(false)
+                }
                 if tab.showsSnapshot, let snap = tab.snapshot {
                     Image(nsImage: snap).resizable().aspectRatio(contentMode: .fill)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -155,9 +207,6 @@ private struct ContentCard: View {
                         .transition(.opacity)
                 }
                 ProgressGlow(progress: tab.progress, isLoading: tab.isLoading, tint: browser.selectedSpace.color)
-                if let impact = browser.impact {
-                    ImpactOverlay(impact: impact).id(impact.id)
-                }
                 if let storeID = tab.url.flatMap({ ExtensionPackage.storeID(from: $0.absoluteString) }) {
                     VStack {
                         Spacer()
@@ -186,7 +235,6 @@ private struct ContentCard: View {
         .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(.primary.opacity(edgeToEdge ? 0 : 0.08)))
         .shadow(color: .black.opacity(edgeToEdge ? 0 : 0.14), radius: 14, y: 4)
-        .modifier(ImpactShake(trigger: browser.impact?.id))
     }
 }
 

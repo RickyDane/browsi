@@ -1,7 +1,8 @@
 import AppKit
 import WebKit
 
-/// Fetches & caches favicons by host.
+/// Fetches & caches favicons by host (in memory and on disk, so tabs restored after a relaunch
+/// show their icon before they load).
 final class FaviconLoader {
     static let shared = FaviconLoader()
     private let cache = NSCache<NSString, NSImage>()
@@ -13,9 +14,33 @@ final class FaviconLoader {
         return URLSession(configuration: c)
     }()
 
+    private let directory: URL? = {
+        let dir = URL.applicationSupportDirectory.appending(path: "Browsi/Favicons", directoryHint: .isDirectory)
+        return (try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)) != nil ? dir : nil
+    }()
+
     init() { cache.countLimit = 500 }
 
-    func cached(host: String) -> NSImage? { cache.object(forKey: host as NSString) }
+    private func fileURL(host: String) -> URL? {
+        guard let name = host.lowercased().addingPercentEncoding(withAllowedCharacters: .alphanumerics), !name.isEmpty
+        else { return nil }
+        return directory?.appending(path: name + ".png")
+    }
+
+    func cached(host: String) -> NSImage? {
+        if let img = cache.object(forKey: host as NSString) { return img }
+        guard let url = fileURL(host: host), let img = NSImage(contentsOf: url), img.isValid else { return nil }
+        img.size = NSSize(width: 32, height: 32)
+        cache.setObject(img, forKey: host as NSString)
+        return img
+    }
+
+    private func store(_ img: NSImage, host: String) {
+        cache.setObject(img, forKey: host as NSString)
+        guard let url = fileURL(host: host), let tiff = img.tiffRepresentation,
+              let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) else { return }
+        try? png.write(to: url, options: .atomic)
+    }
 
     func favicon(for webView: WKWebView) async -> NSImage? {
         guard let pageURL = webView.url, let host = pageURL.host() else { return nil }
@@ -45,7 +70,7 @@ final class FaviconLoader {
         inFlight[host] = task
         let img = await task.value
         inFlight[host] = nil
-        if let img { cache.setObject(img, forKey: host as NSString) }
+        if let img { store(img, host: host) }
         return img
     }
 }

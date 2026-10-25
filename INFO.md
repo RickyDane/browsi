@@ -34,6 +34,13 @@ MainWindowView
 
 | File | Responsibility |
 |---|---|
+| `Web/PageAssistant.swift` | Page summary + Q&A: reads the page's text (isolated content world), splits it into numbered passages (`PageText`, pure), picks passages within the model's context budget (question-matching ones first), streams answers; one `PageAssistant` per tab in `BrowserState`. UI in `UI/PageAssistantPanel.swift`. |
+| `Web/FindInPage.swift`, `UI/FindBar.swift` | ⌘F find (`WKWebView.find` + a match count from the page text) and ⌘⇧F ask mode: page passages → `@Generable FindAnswer` (answer + passage numbers) → glow highlight via `PageScripts.highlight`. `PageFind` (pure) has keyword fallback and validation. One `FindInPage` in `BrowserState`. |
+| `Web/PageTranslator.swift` | Per-tab translation: language detection (`NLLanguageRecognizer` + `lang`), text-node collection/apply/restore in the isolated world, batches through a `TranslationSession` handed out by the window's `.translationTask(browser.translationConfig)`. |
+| `Web/PageActions.swift`, `UI/PageActionSheet.swift` | ⌘K page actions: `EventDraft` → `ICS` (.ics opened in Calendar), `<table>` extraction or `TableDraft` → `CSV`, `ComparisonDraft` for several tabs. Pure `ICS`/`CSV`/`PageCompare` are unit tested. |
+| `Web/PageWatcher.swift`, `UI/Settings/WatchedPagesPane.swift` | Watched pages (`watches.json`): 60 s scheduler, `HeadlessPage` (off-screen WKWebView, default data store), `PageDiff` line diff, `ChangeReport` significance check, `UNUserNotificationCenter` notifications that open the page. |
+| `Web/PageScripts.swift` | Shared isolated-world JS: main text, passage glow highlight, match counting. |
+| `Web/SmartTitles.swift` | Smart tab titles: `SmartTitler` (pure heuristics + validation) and `SmartTitleService` (cache, debounce, one model call at a time). `TabRow` calls `refresh` whenever a tab's title changes. |
 | `Models/BrowserState.swift` | All tab/space mutations, navigation, session save, password-save resolution. Implements `TabEventsDelegate`. |
 | `Models/Tab.swift`, `Space.swift` | `@Observable` state. A tab is *suspended* when `controller == nil`. |
 | `Models/URLInputParser.swift` | Decides URL vs. search; `SearchEngine` URLs. |
@@ -80,6 +87,7 @@ MainWindowView
 
 - Session: `~/Library/Containers/dev.perlick.browsi/Data/Library/Application Support/Browsi/session.json`
 - SwiftData store: default container location inside the sandbox
+- Watched pages: `Application Support/Browsi/watches.json` (includes each page's last text as the diff baseline)
 - Preferences: `UserDefaults` (`searchEngine`, `suspendAfterMinutes`, `contentBlockingEnabled`, `blockerAllowlist`, …)
 - Passwords: Keychain, label `Browsi`
 
@@ -92,18 +100,24 @@ MainWindowView
 - The traffic lights fade out while the sidebar is collapsed and return when it is shown or peeked.
 - Many web settings (JS, autoplay, pop-ups, HTTPS upgrade, fraud warnings, min font, zoom, inspector) apply to newly created tabs.
 
-**Not yet verified manually:** the end-to-end autofill/Touch ID flow, floating video on major sites (YouTube, Netflix, Twitch), Google sign-in, swipe gestures, drag-and-drop, and blocker effectiveness on real sites.
+**Not yet verified manually:** find/ask bar, page translation, ⌘K page actions and watched-page notifications in the running app (their page scripts were checked against a live Wikipedia page and their logic is unit tested), the end-to-end autofill/Touch ID flow, floating video on major sites (YouTube, Netflix, Twitch), Google sign-in, swipe gestures, drag-and-drop, and blocker effectiveness on real sites.
+
+- Page assistant and smart titles generate plain text with `.permissiveContentTransformations` guardrails: guided generation refused harmless news headlines in testing.
 
 **Known limitations**
+- The page assistant reads at most ~5,000 characters per request (on-device context window), so long pages are summarized from their opening; questions pull in the passages that match them. PDFs shown in a tab have no readable text yet.
 - Single window; no private-browsing window yet.
-- No find-in-page (⌘F), no dedicated history/downloads UI (history is searchable via the palette).
+- No dedicated history UI (history is searchable via the palette).
+- Find, translation and page actions read the main frame only (not iframes). Translation covers the text present when it runs; content the page adds later stays untranslated until you translate again.
+- ⌘F replaces the Edit menu's text-editing group (Find, Spelling and Substitutions submenus) so web pages get Browsi's find bar.
+- Watched pages are only checked while Browsi is running; pages that change their text on every load (live tickers) depend on the model to filter noise.
 - iCloud password sync needs signing with an Apple Development team.
 - The block list is a small curated domain list (~100 hosts), not full EasyList.
 - History writes run on the main context (batched); move to a `@ModelActor` if it shows up in profiles.
 
 ## Roadmap ideas
 
-1. Find in page, private windows, downloads popover.
+1. Private windows.
 2. Import passwords from CSV; passkeys via `ASAuthorization`.
 3. Larger/updatable filter lists, with blocked-request counts.
 4. Split view, tab previews on hover, per-space website data stores (profiles).

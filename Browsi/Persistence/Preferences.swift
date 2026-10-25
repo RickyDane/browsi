@@ -121,9 +121,11 @@ final class Preferences {
     var backgroundIntensity: Double { didSet { d.set(backgroundIntensity, forKey: "backgroundIntensity") } }
     var edgeToEdgeContent: Bool { didSet { d.set(edgeToEdgeContent, forKey: "edgeToEdgeContent") } }
     var loginImpactAnimation: Bool { didSet { d.set(loginImpactAnimation, forKey: "loginImpactAnimation") } }
+    var appleSignInSheet: Bool { didSet { d.set(appleSignInSheet, forKey: "appleSignInSheet") } }
     var reduceAnimations: Bool { didSet { d.set(reduceAnimations, forKey: "reduceAnimations") } }
     var showFullURL: Bool { didSet { d.set(showFullURL, forKey: "showFullURL") } }
     var showSuspendedIndicator: Bool { didSet { d.set(showSuspendedIndicator, forKey: "showSuspendedIndicator") } }
+    var smartTabTitles: Bool { didSet { d.set(smartTabTitles, forKey: "smartTabTitles") } }
 
     // MARK: Tabs
     /// Minutes of inactivity before a background tab is suspended (0 = never).
@@ -141,6 +143,11 @@ final class Preferences {
     var fraudWarnings: Bool { didSet { d.set(fraudWarnings, forKey: "fraudWarnings") } }
     var blockPopups: Bool { didSet { d.set(blockPopups, forKey: "blockPopups") } }
     var clearHistoryOnQuit: Bool { didSet { d.set(clearHistoryOnQuit, forKey: "clearHistoryOnQuit") } }
+
+    // MARK: Translation
+    var offerTranslation: Bool { didSet { d.set(offerTranslation, forKey: "offerTranslation") } }
+    /// Base language codes ("fr", "ja") that are translated automatically.
+    var alwaysTranslate: Set<String> { didSet { d.set(Array(alwaysTranslate), forKey: "alwaysTranslate") } }
 
     // MARK: Passwords
     var offerToSavePasswords: Bool { didSet { d.set(offerToSavePasswords, forKey: "offerToSavePasswords") } }
@@ -183,6 +190,8 @@ final class Preferences {
         homeSmartAnswers = bool("homeSmartAnswers", true)
         confirmQuit = bool("confirmQuit", false)
         profileName = d.string(forKey: "profileName") ?? ""
+        offerTranslation = bool("offerTranslation", true)
+        alwaysTranslate = set("alwaysTranslate")
 
         theme = raw("theme", .system)
         spaceTheme = bool("spaceTheme", true)
@@ -194,8 +203,10 @@ final class Preferences {
         edgeToEdgeContent = bool("edgeToEdgeContent", false)
         reduceAnimations = bool("reduceAnimations", false)
         loginImpactAnimation = bool("loginImpactAnimation", true)
+        appleSignInSheet = bool("appleSignInSheet", true)
         showFullURL = bool("showFullURL", false)
         showSuspendedIndicator = bool("showSuspendedIndicator", true)
+        smartTabTitles = bool("smartTabTitles", true)
 
         suspendAfterMinutes = int("suspendAfterMinutes", 10)
         newTabPosition = raw("newTabPosition", .top)
@@ -246,10 +257,12 @@ final class Preferences {
         let fresh = Preferences()
         searchEngine = fresh.searchEngine; restoreSession = fresh.restoreSession; homeSmartAnswers = fresh.homeSmartAnswers; confirmQuit = fresh.confirmQuit
         profileName = fresh.profileName
+        offerTranslation = fresh.offerTranslation; alwaysTranslate = fresh.alwaysTranslate
         theme = fresh.theme; spaceTheme = fresh.spaceTheme; appIcon = fresh.appIcon; sidebarWidth = fresh.sidebarWidth; tabDensity = fresh.tabDensity
         animatedBackground = fresh.animatedBackground; backgroundIntensity = fresh.backgroundIntensity
         edgeToEdgeContent = fresh.edgeToEdgeContent; reduceAnimations = fresh.reduceAnimations
         loginImpactAnimation = fresh.loginImpactAnimation
+        appleSignInSheet = fresh.appleSignInSheet
         showFullURL = fresh.showFullURL; showSuspendedIndicator = fresh.showSuspendedIndicator
         suspendAfterMinutes = fresh.suspendAfterMinutes; newTabPosition = fresh.newTabPosition
         commandClickOpensInBackground = fresh.commandClickOpensInBackground

@@ -8,6 +8,7 @@ struct PaletteItem: Identifiable {
     let symbol: String
     var favicon: NSImage? = nil
     var badge: String? = nil
+    var keywords: String = ""
     let action: () -> Void
 }
 
@@ -157,7 +158,8 @@ enum PaletteResults {
         var candidates: [PaletteSearch.Candidate<String>] = []
         func add(_ item: PaletteItem, boost: Double = 0) {
             items[item.id] = item
-            candidates.append(.init(id: item.id, kind: item.kind, title: item.title, subtitle: item.subtitle, extraBoost: boost))
+            candidates.append(.init(id: item.id, kind: item.kind, title: item.title, subtitle: item.subtitle, extraBoost: boost,
+                                     keywords: item.keywords))
         }
 
         let engine = Preferences.shared.searchEngine
@@ -228,7 +230,7 @@ enum PaletteResults {
                 withAnimation(Motion.bouncy) { HomeStore.shared.isEditing.toggle() }
             },
             PaletteItem(id: "cmd-extensions", kind: .command, title: "Extensions", subtitle: "", symbol: "puzzlepiece.extension.fill") {
-                SettingsPane.open(.extensions)
+                UserDefaults.standard.set("extensions", forKey: "settingsTab"); openSettings()
             },
             PaletteItem(id: "cmd-passwords", kind: .command, title: "Passwords", subtitle: "", symbol: "key.fill") {
                 UserDefaults.standard.set("passwords", forKey: "settingsTab"); openSettings()
@@ -242,17 +244,76 @@ enum PaletteResults {
                                  subtitle: "", symbol: "pin.fill") { browser.togglePin(tab) })
             c.append(PaletteItem(id: "cmd-blocker", kind: .command, title: "Toggle Tracker Blocking for This Site",
                                  subtitle: "", symbol: "shield.lefthalf.filled") { browser.toggleBlockingForSelectedSite() })
-            c.append(PaletteItem(id: "cmd-copy", kind: .command, title: "Copy URL", subtitle: "", symbol: "link") {
-                if let u = tab.url {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(u.absoluteString, forType: .string)
-                    browser.showToast("link", "Link copied")
-                }
-            })
+            c.append(PaletteItem(id: "cmd-copy", kind: .command, title: "Copy URL", subtitle: "", symbol: "link") { browser.copyURL(of: tab) })
+            if !tab.isHome, SmartSearch.isAvailable {
+                c.append(PaletteItem(id: "cmd-summarize", kind: .command, title: "Summarize Page", subtitle: "⌘⇧S",
+                                     symbol: "apple.intelligence") {
+                    if !(browser.pageAssistantVisible && browser.pageAssistantMode == .summary) {
+                        browser.togglePageAssistant(.summary)
+                    }
+                })
+                c.append(PaletteItem(id: "cmd-ask-page", kind: .command, title: "Ask About Page", subtitle: "⌘⇧E",
+                                     symbol: "bubble.left.and.text.bubble.right") {
+                    if !(browser.pageAssistantVisible && browser.pageAssistantMode == .chat) {
+                        browser.togglePageAssistant(.chat)
+                    }
+                })
+            }
         }
+        if let tab = browser.selectedWebTab {
+            c += pageCommands(tab: tab, browser: browser)
+        }
+        c.append(PaletteItem(id: "cmd-watched", kind: .command, title: "Watched Pages", subtitle: "",
+                             symbol: "eye") {
+            UserDefaults.standard.set("watched", forKey: "settingsTab"); openSettings()
+        })
         for (i, s) in browser.spaces.enumerated() where s.id != browser.selectedSpaceID {
             c.append(PaletteItem(id: "cmd-go-\(s.id)", kind: .command, title: "Go to \(s.name)", subtitle: "",
                                  symbol: s.symbol, badge: "⌃\(i + 1)") { browser.switchSpace(to: s) })
+        }
+        return c
+    }
+
+    /// Smart actions on the current page: find, translate, calendar, table, compare, watch.
+    private static func pageCommands(tab: Tab, browser: BrowserState) -> [PaletteItem] {
+        var c: [PaletteItem] = [
+            PaletteItem(id: "cmd-find", kind: .command, title: "Find on Page", subtitle: "⌘F",
+                        symbol: "text.magnifyingglass", keywords: "search text words") { browser.openFind(.text) },
+            PaletteItem(id: "cmd-find-ask", kind: .command, title: "Ask Where the Page Says…",
+                        subtitle: "Find by question · ⌘⇧F", symbol: "sparkle.magnifyingglass", keywords: "question where does mention find locate") { browser.openFind(.ask) },
+        ]
+        let translator = browser.translator(for: tab)
+        let langName = translator.language.map(TranslationLanguages.displayName)
+        c.append(PaletteItem(id: "cmd-translate", kind: .command,
+                             title: translator.isTranslated ? "Show Original Page" : "Translate Page",
+                             subtitle: translator.isTranslated ? "" : langName.map { "From \($0), on device · ⌥⌘T" } ?? "On device · ⌥⌘T",
+                             symbol: "translate", keywords: "translation language english german french spanish") { browser.toggleTranslation(tab) })
+        let watch = PageWatcher.shared.watch(for: tab.url)
+        c.append(PaletteItem(id: "cmd-watch", kind: .command,
+                             title: watch == nil ? "Watch Page for Changes…" : "Edit Page Watch…",
+                             subtitle: watch?.trimmedFocus.map { "Watching for: \($0)" } ?? "Choose what to be notified about",
+                             symbol: "eye", keywords: "monitor notify alert changes track updates price stock") {
+            browser.showWatchSetup(tab)
+        })
+        if watch != nil {
+            c.append(PaletteItem(id: "cmd-unwatch", kind: .command, title: "Stop Watching Page", subtitle: "",
+                                 symbol: "eye.slash", keywords: "unwatch remove monitor") { browser.stopWatching(tab.url) })
+        }
+        c.append(PaletteItem(id: "cmd-table", kind: .command, title: "Extract Table as CSV", subtitle: "Copy or save a table from this page",
+                             symbol: "tablecells", keywords: "export spreadsheet excel numbers data csv copy save") { browser.startPageAction(.table) })
+        if SmartSearch.isAvailable {
+            c.append(PaletteItem(id: "cmd-calendar", kind: .command, title: "Add Event to Calendar",
+                                 subtitle: "Find the date on this page", symbol: "calendar.badge.plus", keywords: "event meeting appointment date schedule add remind") {
+                browser.startPageAction(.calendar)
+            })
+            let others = browser.compareCandidates(for: tab)
+            if !others.isEmpty {
+                let names = ([tab] + others).map { SmartTitler.clip($0.smartTitle ?? $0.displayTitle, to: 22) }
+                c.append(PaletteItem(id: "cmd-compare", kind: .command, title: "Compare Open Tabs",
+                                     subtitle: names.joined(separator: " · "), symbol: "rectangle.split.3x1", keywords: "compare versus side differences products tabs") {
+                    browser.startPageAction(.compare)
+                })
+            }
         }
         return c
     }

@@ -2,7 +2,7 @@ import AppKit
 import WebKit
 
 /// Detects clicks on "Sign in with Apple" and passkey buttons (isolated world, trusted clicks only)
-/// and asks the browser to play the wave-impact animation.
+/// and asks the browser to play the cipher-grid wave (the same for both).
 final class LoginImpactBridge: NSObject, WKScriptMessageHandler {
     static let shared = LoginImpactBridge()
     static let handlerName = "browsiImpact"
@@ -47,15 +47,11 @@ final class LoginImpactBridge: NSObject, WKScriptMessageHandler {
               let body = message.body as? [String: Any],
               let kind = (body["kind"] as? String).flatMap(LoginImpact.Kind.init(rawValue:)) else { return }
         if kind == .passkey { PasskeySupport.shared.userIntendsToUsePasskey(browser: browser) }
+        if kind == .apple { browser.noteAppleSignInIntent(in: webView) }
         guard browser.selectedTab?.controller?.webView === webView else { return }
 
         // Where to center the wave (web view coordinates, top-left origin).
         var point = CGPoint(x: webView.bounds.midX, y: webView.bounds.midY)
-        var buttonSize = CGSize(width: 220, height: 44)
-        if let w = body["w"] as? Double, let h = body["h"] as? Double {
-            let scale = webView.pageZoom * webView.magnification
-            buttonSize = CGSize(width: w * scale, height: h * scale)
-        }
         let scale = webView.pageZoom * webView.magnification
         let pointer = body["pointer"] as? Bool == true
         if message.frameInfo.isMainFrame {
@@ -71,16 +67,10 @@ final class LoginImpactBridge: NSObject, WKScriptMessageHandler {
                 point = CGPoint(x: p.x, y: webView.isFlipped ? p.y : webView.bounds.height - p.y)
             }
         }
-        browser.playLoginImpact(kind, at: point, buttonSize: buttonSize, in: webView)
+        browser.playLoginImpact(kind, at: point, in: webView)
     }
 }
 
-struct LoginImpact: Identifiable {
+enum LoginImpact {
     enum Kind: String { case apple, passkey }
-    let id = UUID()
-    let kind: Kind
-    let origin: CGPoint
-    let buttonSize: CGSize
-    let start = Date()
-    var snapshot: NSImage?
 }

@@ -63,7 +63,7 @@ struct LoginImpactTests {
         for id in ["n1", "n2", "n3", "n4", "n5"] { #expect(map[id] == .some(nil), "\(id) must not trigger") }
     }
 
-    @Test func realClickTriggersImpactAtPointer() async throws {
+    @Test func appleClickPlaysPasskeyWaveAtPointer() async throws {
         let window = makeWindow(); defer { window.orderOut(nil) }
         let (browser, tab, webView) = try await loadPage("""
             <button style="position:fixed;left:300px;top:250px;width:200px;height:44px">Sign in with Apple</button>
@@ -79,16 +79,9 @@ struct LoginImpactTests {
         webView.mouseUp(with: click(.leftMouseUp))
 
         let end = ContinuousClock.now + .seconds(3)
-        while browser.impact == nil, ContinuousClock.now < end { try? await Task.sleep(for: .milliseconds(30)) }
-        let impact = try #require(browser.impact, "clicking Sign in with Apple must start the impact")
-        #expect(impact.kind == .apple)
-        #expect(abs(impact.origin.x - 400) < 60 && abs(impact.origin.y - 272) < 60, "origin \(impact.origin)")
-        #expect(abs(impact.buttonSize.width - 200) < 2)
-
-        while browser.impact?.snapshot == nil, ContinuousClock.now < end { try? await Task.sleep(for: .milliseconds(30)) }
-        #expect(browser.impact?.snapshot != nil, "page snapshot for the ripple")
-        try? await Task.sleep(for: .seconds(ImpactOverlay.duration + 0.3))
-        #expect(browser.impact == nil, "impact clears itself")
+        while browser.calmRipple == nil, ContinuousClock.now < end { try? await Task.sleep(for: .milliseconds(30)) }
+        let ripple = try #require(browser.calmRipple, "clicking Sign in with Apple must start the same wave as passkeys")
+        #expect(abs(ripple.origin.x - 400) < 60 && abs(ripple.origin.y - 272) < 60, "origin \(ripple.origin)")
     }
 
     @Test func untrustedScriptClicksDoNothing() async throws {
@@ -96,13 +89,13 @@ struct LoginImpactTests {
         let (browser, _, webView) = try await loadPage("<button id=b>Sign in with a passkey</button>", in: window)
         _ = try await webView.evaluateJavaScript("document.getElementById('b').click()")
         try? await Task.sleep(for: .milliseconds(400))
-        #expect(browser.impact == nil)
+        #expect(browser.calmRipple == nil)
     }
 
-    @Test func rippleShaderIsCompiledIntoApp() throws {
+    @Test func gridShaderIsCompiledIntoApp() throws {
         let device = try #require(MTLCreateSystemDefaultDevice())
         let library = try device.makeDefaultLibrary(bundle: Bundle(for: TabWebController.self))
-        #expect(library.functionNames.contains("browsiRipple"))
+        #expect(library.functionNames.contains("browsiPasskeyGrid"))
     }
 
     @Test func passkeyStatusMapping() {

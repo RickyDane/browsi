@@ -18,6 +18,12 @@ A native macOS browser built with SwiftUI and WebKit: vertical tabs, Spaces, Liq
 - **Floating video**: leave a tab that's playing a video and the video pops out into a floating window you can drag and resize (double-click it to go back to the tab).
 - **Link Peek**: ⇧-click a link to preview it in a glass modal. ⌘↩ opens it as a tab, Esc closes it.
 - **Middle-click**: middle-click a link to open it in a background tab (⇧ for foreground); middle-click a tab in the sidebar to close it.
+- **Page summary & Q&A** (⌘⇧S, or the Apple Intelligence button in the address bar): a glass side panel summarizes the current page with Apple Intelligence's on-device model (one-line gist + key points), then answers your questions about it. ⌘⇧E opens the same panel as an empty chat (no summary) with the cursor in the question field. Citations like [2] are clickable and scroll the page to that passage. Each tab keeps its own summary and conversation; nothing leaves the Mac.
+- **Find in page that understands questions** (⌘F, ⌘G / ⌘⇧G): a glass find bar over the page with a match count. ⌘⇧F (or Tab in the bar) switches to *ask* mode: type a question like "where do they mention refunds?" and Apple Intelligence picks the passages that answer it, highlights them with a glow and scrolls to them (↩ / ⇧↩ steps through them), with a one-line answer. ⌘↩ asks from word mode. Without Apple Intelligence it falls back to keyword relevance.
+- **On-device page translation** (⌥⌘T): pages in another language get a translate button in the address bar. The page is translated in place with Apple's Translation framework, with visible text first and the rest filled in batch by batch; click again to show the original. Right-click the button for *Always Translate <language>*. Toggle offers in Settings › Websites. Nothing leaves the Mac.
+- **Page actions in ⌘K**: *Add Event to Calendar* (Apple Intelligence finds the event, you check it in an editable card, then it opens in Calendar), *Extract Table as CSV* (real `<table>`s, or a table built by the model from lists and cards; copy or save), and *Compare Open Tabs* (the current tab and up to 3 recent tabs side by side, with a short verdict). Natural phrasing works too, like "add this to my calendar".
+- **Watch a page** (⌘K › *Watch Page for Changes…*, or the Page menu): say what to watch for ("price below $100", "back in stock", "a new chapter", or leave it empty for any meaningful change) and how often. Browsi re-checks the page in a hidden web view (with your cookies) every 15 min to every day. Apple Intelligence ignores noise (clocks, counters, ads) and sends a notification like "Price dropped from $129 to $99". Click it to open the page. Watched pages show an eye in the address bar (click it to edit or stop); manage them, including what each one watches for, in Settings › Watched Pages.
+- **Smart tab titles**: long or SEO-stuffed titles are shortened in the sidebar, e.g. "Swift Concurrency | Apple Developer Documentation" → "Swift Concurrency", keeping unread counters like "(3)". The site-name clean-up runs instantly; Apple Intelligence refines it when available. Hover a tab for its full title. Toggle in Settings › Appearance.
 - **Smart-rename downloads**: unclear names like `file_8f3a2c91.pdf` are renamed by Apple Intelligence's on-device model (Foundation Models) from the source page and the file's text, e.g. `Acme Invoice 8823 2026-10.pdf`.
 - **Wave impact**: clicking "Sign in with Apple" or a passkey button makes the page ripple like water from the click (Metal shader), with shockwave rings, sparks, a flash and a short card shake. Toned down for Reduce Motion; toggle in Settings › Appearance.
 - **Passkeys**: full WebAuthn via WebKit (iCloud Keychain, password-manager apps, iPhone via QR code, security keys, passkey autofill), once the build carries Apple's browser passkey entitlement (see below).
@@ -58,6 +64,9 @@ To work in Xcode, run `xcodegen generate` and open `Browsi.xcodeproj`. The proje
 | Link Peek / open peek as tab / close | ⇧-click / ⌘↩ / Esc |
 | Open link in new tab / close tab | Middle-click link / middle-click tab |
 | Downloads | ⌘J |
+| Summarize page / ask about page (empty chat) | ⌘⇧S / ⌘⇧E |
+| Find / ask the page / next–previous match | ⌘F / ⌘⇧F / ⌘G ⌘⇧G (↩ ⇧↩ in the bar) |
+| Translate page / show original | ⌥⌘T |
 | Zoom | ⌘+ / ⌘- / ⌘0 |
 
 ## Passwords & signing

@@ -34,6 +34,30 @@ struct URLBarView: View {
                 .help("Add this extension to Browsi")
                 .transition(.scale.combined(with: .opacity))
             }
+            if host != nil, let tab {
+                TranslateButton(translator: browser.translator(for: tab), tab: tab)
+                if PageWatcher.shared.isWatching(tab.url) {
+                    Button { browser.showWatchSetup(tab) } label: {
+                        Image(systemName: "eye.fill").foregroundStyle(browser.selectedSpace.color)
+                    }
+                    .buttonStyle(SquishButtonStyle()).padding(-5)
+                    .help(PageWatcher.shared.watch(for: tab.url)?.trimmedFocus.map { "Watching for: \($0) — click to edit" }
+                          ?? "Watching this page for changes — click to edit")
+                    .transition(.scale.combined(with: .opacity))
+                }
+            }
+            if host != nil, SmartSearch.isAvailable {
+                Button {
+                    if browser.pageAssistantVisible { browser.closePageAssistant() } else { browser.togglePageAssistant(.summary) }
+                } label: {
+                    Image(systemName: "apple.intelligence")
+                        .foregroundStyle(browser.pageAssistantVisible ? AnyShapeStyle(browser.selectedSpace.color)
+                                                                      : AnyShapeStyle(.secondary))
+                        .symbolEffect(.bounce, value: browser.pageAssistantVisible)
+                }
+                .buttonStyle(SquishButtonStyle()).padding(-5)
+                .help("Summarize this page (⌘⇧S) · Ask about it (⌘⇧E)")
+            }
             if host != nil {
                 let blocking = ContentBlocker.shared.isEnabled(for: host)
                 Button { browser.toggleBlockingForSelectedSite() } label: {
@@ -72,5 +96,51 @@ struct URLBarView: View {
         guard let url = tab?.url, tab?.isHome == false else { return nil }
         if Preferences.shared.showFullURL { return url.absoluteString }
         return url.host()?.replacingOccurrences(of: "www.", with: "")
+    }
+}
+
+/// Shown when the page is in another language (or translated): translates on device, or restores the original.
+private struct TranslateButton: View {
+    @Environment(BrowserState.self) private var browser
+    let translator: PageTranslator
+    let tab: Tab
+
+    var body: some View {
+        if translator.offersTranslation || translator.state != .idle {
+            let lang = translator.language
+            Button { browser.toggleTranslation(tab) } label: {
+                if translator.isBusy {
+                    ProgressView().controlSize(.mini).frame(width: 14, height: 14)
+                } else {
+                    Image(systemName: "translate")
+                        .foregroundStyle(translator.isTranslated ? AnyShapeStyle(browser.selectedSpace.color) : AnyShapeStyle(.secondary))
+                        .symbolEffect(.bounce, value: translator.isTranslated)
+                }
+            }
+            .buttonStyle(SquishButtonStyle()).padding(-5)
+            .help(help(lang))
+            .contextMenu {
+                Button(translator.isTranslated || translator.isBusy ? "Show Original" : "Translate Page") {
+                    browser.toggleTranslation(tab)
+                }
+                if let lang {
+                    Toggle("Always Translate \(TranslationLanguages.displayName(lang))", isOn: Binding(
+                        get: { Preferences.shared.alwaysTranslate.contains(lang) },
+                        set: { browser.setAlwaysTranslate(lang, $0) }))
+                }
+            }
+            .transition(.scale.combined(with: .opacity))
+        }
+    }
+
+    private func help(_ lang: String?) -> String {
+        switch translator.state {
+        case .translated: return "Translated on device — click to show the original"
+        case .translating(let done, let total) where total > 0: return "Translating… \(done * 100 / total) %"
+        case .translating: return "Translating…"
+        case .failed(let message): return message
+        case .idle:
+            return lang.map { "Translate from \(TranslationLanguages.displayName($0)) on device (⌥⌘T)" } ?? "Translate page (⌥⌘T)"
+        }
     }
 }

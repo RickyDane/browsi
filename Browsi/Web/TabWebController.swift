@@ -5,7 +5,9 @@ import UniformTypeIdentifiers
 /// Events a tab reports back to the browser.
 protocol TabEventsDelegate: AnyObject {
     func openInNewTab(_ request: URLRequest, from tab: Tab, background: Bool)
-    func openPopup(configuration: WKWebViewConfiguration, from tab: Tab) -> WKWebView?
+    func openPopup(configuration: WKWebViewConfiguration, for url: URL?, from tab: Tab) -> WKWebView?
+    /// A main-frame navigation is about to start; lets the browser move Apple sign-in into its sheet.
+    func tab(_ tab: Tab, willNavigateMainFrameTo url: URL) async
     func tabDidClose(_ tab: Tab)
     func tabDidFinishNavigation(_ tab: Tab)
     func tabTitleDidChange(_ tab: Tab)
@@ -51,6 +53,7 @@ final class TabWebController: NSObject {
         observations = [
             watch(\.title), watch(\.url), watch(\.estimatedProgress), watch(\.isLoading),
             watch(\.canGoBack), watch(\.canGoForward), watch(\.hasOnlySecureContent),
+            watch(\.fullscreenState),
         ]
     }
 
@@ -63,6 +66,8 @@ final class TabWebController: NSObject {
         tab.canGoBack = webView.canGoBack
         tab.canGoForward = webView.canGoForward
         tab.isSecure = webView.url?.scheme == "https" && webView.hasOnlySecureContent
+        let fullscreen = webView.fullscreenState != .notInFullscreen
+        if tab.isInElementFullscreen != fullscreen { tab.isInElementFullscreen = fullscreen }
         if oldTitle != tab.title { delegate?.tabTitleDidChange(tab) }
     }
 
@@ -139,6 +144,7 @@ extension TabWebController: WKNavigationDelegate {
         }
 
         if action.targetFrame?.isMainFrame == true {
+            if let url = action.request.url { await delegate?.tab(tab, willNavigateMainFrameTo: url) }
             ContentBlocker.shared.apply(to: webView.configuration.userContentController,
                                         host: action.request.url?.host())
         }
@@ -218,7 +224,7 @@ extension TabWebController: WKUIDelegate {
                 return nil
             }
         }
-        return delegate?.openPopup(configuration: configuration, from: tab)
+        return delegate?.openPopup(configuration: configuration, for: navigationAction.request.url, from: tab)
     }
 
     func webViewDidClose(_ webView: WKWebView) {

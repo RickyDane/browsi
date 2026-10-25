@@ -47,6 +47,7 @@ private struct ExtensionsPopup: View {
     let ids: [UUID]
     let run: (UUID) -> Void
     @State private var manager = ExtensionManager.shared
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -59,7 +60,7 @@ private struct ExtensionsPopup: View {
             ForEach(ids, id: \.self) { id in ExtensionPopupRow(id: id) { run(id) } }
             Divider().padding(.vertical, 6)
             Button {
-                SettingsPane.open(.extensions)
+                SettingsPane.open(.extensions, with: openSettings)
             } label: {
                 Label("Manage Extensions…", systemImage: "gearshape").frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -114,6 +115,7 @@ private struct ExtensionPopupRow: View {
 
 private struct ExtensionActionButton: View {
     @Environment(BrowserState.self) private var browser
+    @Environment(\.openSettings) private var openSettings
     let id: UUID
     @State private var manager = ExtensionManager.shared
 
@@ -145,7 +147,7 @@ private struct ExtensionActionButton: View {
         .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .global) }) { manager.actionAnchors[id] = $0 }
         .contextMenu {
             if context?.optionsPageURL != nil { Button("Options…") { manager.openOptions(id) } }
-            Button("Manage Extensions…") { SettingsPane.open(.extensions) }
+            Button("Manage Extensions…") { SettingsPane.open(.extensions, with: openSettings) }
             Divider()
             Button("Turn Off") { manager.setEnabled(id, false) }
         }

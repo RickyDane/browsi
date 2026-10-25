@@ -2,6 +2,7 @@ import SwiftUI
 import WebKit
 import Observation
 import UniformTypeIdentifiers
+@preconcurrency import Translation
 
 enum PaletteMode: Equatable {
     case hidden
@@ -28,6 +29,25 @@ final class BrowserState {
     var spaceSwitchDirection: Int = 1
     /// Link Peek preview (⇧-click), shown as a modal over the content.
     var peek: PeekState?
+    /// The Apple Intelligence page summary / Q&A panel beside the web content (⌘⇧S).
+    var pageAssistantVisible = false
+    /// `.summary` (⌘⇧S) summarizes the page on open; `.chat` (⌘⇧E) opens an empty chat about it.
+    var pageAssistantMode: PageAssistantMode = .summary
+    @ObservationIgnored private var pageAssistants: [UUID: PageAssistant] = [:]
+    /// Find bar (⌘F / ⌘⇧F) for the selected tab.
+    let find = FindInPage()
+    /// A page action from the command palette (calendar, table, compare), shown as a sheet.
+    var pageAction: PageActionRun?
+    /// The "Watch This Page" sheet (new watch or editing one), if shown.
+    var watchSetup: WatchSetup?
+    @ObservationIgnored var pageTranslators: [UUID: PageTranslator] = [:]
+    /// Drives the window's `.translationTask`; changing or invalidating it starts a translation.
+    var translationConfig: TranslationSession.Configuration?
+    @ObservationIgnored weak var translationTab: Tab?
+    /// "Sign in with Apple" shown in a native sheet instead of the tab or a popup window.
+    var appleSignIn: AppleSignInState?
+    /// The page whose "Sign in with Apple" button was just clicked (its next popup goes into the sheet).
+    @ObservationIgnored private var appleIntent: (webView: ObjectIdentifier, at: Date)?
     let floatingPlayer = FloatingPlayer()
     /// Files currently flying from the click position to the downloads button.
     var downloadFlights: [DownloadFlight] = []
@@ -48,12 +68,12 @@ final class BrowserState {
     var downloadsBounce = 0
     @ObservationIgnored private var lastClick: (point: CGPoint, time: Date)?
     @ObservationIgnored private var clickMonitor: Any?
-    /// Wave-impact animation currently playing over the content card.
-    var impact: LoginImpact?
     /// Calm full-window ripple (passkey sign-in).
     var calmRipple: CalmRipple?
 
     let library: LibraryStore
+    /// The tab that was selected before the current one (⌃Tab switches back to it).
+    @ObservationIgnored private weak var previousTab: Tab?
     @ObservationIgnored private var closedTabs: [(url: URL, spaceID: UUID)] = []
     @ObservationIgnored private var saveTask: Task<Void, Never>?
     @ObservationIgnored private var toastTask: Task<Void, Never>?
@@ -67,9 +87,14 @@ final class BrowserState {
                       pinnedTabs: s.pinned.map {
                           let t = Tab(id: $0.id, url: $0.url, title: $0.title, isPinned: true)
                           t.pinnedURL = $0.pinnedURL ?? $0.url
+                          t.restoreFavicon()
                           return t
                       },
-                      tabs: s.tabs.filter { $0.url != Tab.homeURL }.map { Tab(id: $0.id, url: $0.url, title: $0.title) },
+                      tabs: s.tabs.filter { $0.url != Tab.homeURL }.map {
+                          let t = Tab(id: $0.id, url: $0.url, title: $0.title)
+                          t.restoreFavicon()
+                          return t
+                      },
                       selectedTabID: nil)   // always launch on the home page
             }
             selectedSpaceID = snap.selectedSpaceID.flatMap { id in snap.spaces.contains { $0.id == id } ? id : nil }
@@ -86,6 +111,7 @@ final class BrowserState {
         PasskeyAuthenticator.onNotice = { [weak self] symbol, text in self?.showToast(symbol, text) }
         PasskeyAuthenticator.onCeremony = { [weak self] started in self?.passkeyCeremony(started: started) }
         LoginImpactBridge.shared.browser = self
+        AppleSignInBridge.shared.browser = self
         HomeWebCache.shared.browser = self
         WebConfigFactory.passwordBridge.onOfferSave = { [weak self] offer in
             withAnimation(.bouncy) { self?.pendingPasswordSave = offer }
@@ -99,6 +125,7 @@ final class BrowserState {
         installNavigationButtons()
         ExtensionManager.shared.start(browser: self)
         DownloadManager.shared.browser = self
+        PageWatcher.shared.start(browser: self)
         Task {
             _ = await ContentBlocker.shared.load()
             for tab in allTabs { tab.controller?.applyContentBlocking() }
@@ -151,6 +178,7 @@ final class BrowserState {
             Task { previous?.snapshot = try? await old.takeSnapshot(configuration: nil) }
         }
         previous?.lastActive = .now
+        if let previous { previousTab = previous }
         withAnimation(Motion.snappy) { space(of: tab)?.selectedTabID = tab.id }
         activate(tab)
         ExtensionManager.shared.didActivate(tab.controller, previous: previous?.controller)
@@ -194,8 +222,11 @@ final class BrowserState {
         }
         if tab.isInFloatingPlayer { floatingPlayer.close(returnTo: nil) }
         if peek?.tab === tab { peek = nil }
+        if appleSignIn?.tab === tab || appleSignIn?.source === tab { cancelAppleSignIn() }
         tab.controller?.tearDown()
         tab.controller = nil
+        pageAssistants.removeValue(forKey: tab.id)?.reset()
+        SmartTitleService.shared.forget(tab)
         if wasSelected {
             let remaining = space.allTabs
             if remaining.isEmpty {
@@ -214,6 +245,7 @@ final class BrowserState {
         let wasSelected = space.selectedTabID == tab.id
         if tab.isInFloatingPlayer { floatingPlayer.close(returnTo: nil) }
         if peek?.tab === tab { peek = nil }
+        if appleSignIn?.tab === tab || appleSignIn?.source === tab { cancelAppleSignIn() }
         tab.controller?.tearDown()
         tab.controller = nil
         tab.interactionState = nil
@@ -221,7 +253,7 @@ final class BrowserState {
         tab.showsSnapshot = false
         tab.isLoading = false
         tab.progress = 0
-        if let home = tab.pinnedURL { tab.url = home }
+        if let home = tab.pinnedURL { tab.url = home; tab.restoreFavicon() }
         if wasSelected {
             let others = space.allTabs.filter { $0 !== tab }
             let loaded = others.filter { !$0.isSuspended || !$0.isPinned }
@@ -260,6 +292,7 @@ final class BrowserState {
             Task { previous.snapshot = try? await old.takeSnapshot(configuration: nil) }
         }
         previous.lastActive = .now
+        previousTab = previous
         withAnimation(Motion.snappy) { space.selectedTabID = nil }
         floatingPlayer.considerPopOut(previous)
         scheduleSave()
@@ -323,6 +356,17 @@ final class BrowserState {
         select(tabs[(cur + delta + tabs.count) % tabs.count])
     }
 
+    /// ⌃Tab: switches back to the previously selected tab (repeating toggles between the last two).
+    /// Falls back to the most recently active other tab if the previous one was closed.
+    func selectPreviousTab() {
+        let current = selectedTab
+        let candidates = allTabs.filter { $0 !== current }
+        let target = previousTab.flatMap { p in candidates.first { $0 === p } }
+            ?? candidates.max { $0.lastActive < $1.lastActive }
+        guard let target else { return }
+        select(target)
+    }
+
     // MARK: Navigation
 
     func open(input: String, inNewTab: Bool) {
@@ -361,6 +405,7 @@ final class BrowserState {
         spaceSwitchDirection = to >= from ? 1 : -1
         let previous = selectedTab
         previous?.lastActive = .now
+        if let previous { previousTab = previous }
         closePeek()
         withAnimation(Motion.smooth) { selectedSpaceID = space.id }
         if let tab = space.selectedTab ?? space.allTabs.first {
@@ -505,22 +550,10 @@ final class BrowserState {
 
     // MARK: Login impact
 
-    func playLoginImpact(_ kind: LoginImpact.Kind, at point: CGPoint, buttonSize: CGSize, in webView: WKWebView) {
+    func playLoginImpact(_ kind: LoginImpact.Kind, at point: CGPoint, in webView: WKWebView) {
         guard Preferences.shared.loginImpactAnimation else { return }
-        if kind == .passkey { playCalmRipple(at: point, in: webView); return }
-        let impact = LoginImpact(kind: kind, origin: point, buttonSize: buttonSize)
-        self.impact = impact
-        NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .now)
-        Task {
-            // The rings start immediately; the page ripple joins as soon as the snapshot is ready.
-            let config = WKSnapshotConfiguration()
-            config.afterScreenUpdates = false
-            if let snap = try? await webView.takeSnapshot(configuration: config), self.impact?.id == impact.id {
-                self.impact?.snapshot = snap
-            }
-            try? await Task.sleep(for: .seconds(ImpactOverlay.duration))
-            if self.impact?.id == impact.id { self.impact = nil }
-        }
+        // "Sign in with Apple" and passkey buttons share the exact same cipher-grid wave.
+        playCalmRipple(at: point, in: webView)
     }
 
     /// Passkey requests currently being handled by Browsi's authenticator.
@@ -563,6 +596,82 @@ final class BrowserState {
         }
     }
 
+    // MARK: Sign in with Apple
+
+    /// Called when the user clicks a "Sign in with Apple" button on a page.
+    func noteAppleSignInIntent(in webView: WKWebView) {
+        appleIntent = (ObjectIdentifier(webView), .now)
+    }
+
+    private func hasRecentAppleIntent(_ tab: Tab) -> Bool {
+        guard let intent = appleIntent, let webView = tab.controller?.webView,
+              intent.webView == ObjectIdentifier(webView) else { return false }
+        return Date.now.timeIntervalSince(intent.at) < 4
+    }
+
+    /// Sign in with Apple JS (`usePopup`) or a site's own Apple popup: host it in the sheet, not a tab.
+    private func openAppleSignInPopup(configuration: WKWebViewConfiguration, for url: URL?, from opener: Tab) -> WKWebView? {
+        guard Preferences.shared.appleSignInSheet, appleSignIn == nil,
+              AppleSignIn.isAuthorizeURL(url) || hasRecentAppleIntent(opener) else { return nil }
+        appleIntent = nil
+        let tab = Tab(url: nil)
+        let c = TabWebController(tab: tab, configuration: configuration, delegate: self)
+        c.isPeek = true   // not a real tab: no history, no nested peeks
+        tab.controller = c
+        if selectedTab !== opener { select(opener) }
+        withAnimation(Motion.bouncy) { appleSignIn = AppleSignInState(tab: tab, source: opener, mode: .popup) }
+        return c.webView
+    }
+
+    func tab(_ tab: Tab, willNavigateMainFrameTo url: URL) async {
+        if let sheet = appleSignIn, sheet.tab === tab {
+            // In-place sign-in is done once the page heads back to the site (form_post / redirect).
+            if sheet.mode == .inPlace, AppleSignIn.leavesApple(url) { endAppleSignIn() }
+            return
+        }
+        guard Preferences.shared.appleSignInSheet, appleSignIn == nil, selectedTab === tab,
+              tab.controller?.isPeek == false, AppleSignIn.isAuthorizeURL(url),
+              let webView = tab.controller?.webView else { return }
+        appleIntent = nil
+        // Freeze the site as the backdrop before Apple's page replaces it.
+        let config = WKSnapshotConfiguration()
+        config.afterScreenUpdates = false
+        let background = try? await webView.takeSnapshot(configuration: config)
+        guard appleSignIn == nil, selectedTab === tab else { return }
+        withAnimation(Motion.bouncy) {
+            appleSignIn = AppleSignInState(tab: tab, source: tab, mode: .inPlace, background: background)
+        }
+    }
+
+    /// Sign-in finished: the sheet goes away (an in-place web view returns to the content card).
+    func endAppleSignIn() {
+        guard let sheet = appleSignIn else { return }
+        withAnimation(Motion.snappy) { appleSignIn = nil }
+        AppleSignInBridge.shared.sheetDidClose(sheet.id)
+        if sheet.mode == .popup {
+            let c = sheet.tab.controller
+            Task {
+                try? await Task.sleep(for: .milliseconds(400))   // let the dismiss transition finish
+                c?.tearDown()
+                sheet.tab.controller = nil
+            }
+        }
+    }
+
+    /// The user closed the sheet: tell the page sign-in was cancelled.
+    func cancelAppleSignIn() {
+        guard let sheet = appleSignIn else { return }
+        let webView = sheet.tab.controller?.webView
+        endAppleSignIn()
+        switch sheet.mode {
+        case .popup:
+            // Closing from script lets Sign in with Apple JS see `popup.closed` and reject its promise.
+            webView?.evaluateJavaScript("window.close()") { _, _ in }
+        case .inPlace:
+            if webView?.canGoBack == true { webView?.goBack() } else { webView?.stopLoading() }
+        }
+    }
+
     // MARK: Link Peek
 
     func closePeek() {
@@ -599,6 +708,38 @@ final class BrowserState {
         guard let tab = selectedTab, let url = tab.url else { return }
         let added = library.toggleBookmark(url: url, title: tab.displayTitle)
         showToast(added ? "star.fill" : "star.slash", added ? "Bookmarked" : "Bookmark removed")
+    }
+
+    /// Copies the tab's URL (the selected tab by default) to the pasteboard and confirms with a toast.
+    func copyURL(of tab: Tab? = nil) {
+        guard let url = (tab ?? selectedTab)?.url else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(url.absoluteString, forType: .string)
+        showToast("link", "Link copied")
+    }
+
+    // MARK: Page assistant
+
+    /// Each tab keeps its own summary and conversation while it stays open.
+    func pageAssistant(for tab: Tab) -> PageAssistant {
+        if let a = pageAssistants[tab.id] { return a }
+        let a = PageAssistant()
+        pageAssistants[tab.id] = a
+        return a
+    }
+
+    /// Opens the panel in `mode`; closes it if it is already open in that mode, else switches mode.
+    func togglePageAssistant(_ mode: PageAssistantMode = .summary) {
+        if pageAssistantVisible, pageAssistantMode == mode {
+            closePageAssistant()
+            return
+        }
+        pageAssistantMode = mode
+        withAnimation(Motion.bouncy) { pageAssistantVisible = true }
+    }
+
+    func closePageAssistant() {
+        withAnimation(Motion.bouncy) { pageAssistantVisible = false }
     }
 
     func showToast(_ symbol: String, _ text: String) {
@@ -691,7 +832,8 @@ extension BrowserState: TabEventsDelegate {
         newTab(url: url, in: space(of: tab), background: background, after: tab)
     }
 
-    func openPopup(configuration: WKWebViewConfiguration, from opener: Tab) -> WKWebView? {
+    func openPopup(configuration: WKWebViewConfiguration, for url: URL?, from opener: Tab) -> WKWebView? {
+        if let webView = openAppleSignInPopup(configuration: configuration, for: url, from: opener) { return webView }
         let space = space(of: opener) ?? selectedSpace
         let tab = Tab(url: nil)
         let c = TabWebController(tab: tab, configuration: configuration, delegate: self)
@@ -705,6 +847,7 @@ extension BrowserState: TabEventsDelegate {
     }
 
     func tabDidClose(_ tab: Tab) {
+        if appleSignIn?.tab === tab, appleSignIn?.mode == .popup { endAppleSignIn(); return }
         if peek?.tab === tab { closePeek() } else { close(tab) }
     }
 
@@ -721,6 +864,8 @@ extension BrowserState: TabEventsDelegate {
     func tabDidFinishNavigation(_ tab: Tab) {
         if tab.controller?.isPeek == true { return }
         if let url = tab.url { library.recordVisit(url: url, title: tab.title) }
+        if tab === selectedTab { find.pageChanged(tab); PageWatcher.shared.markSeen(tab.url) }
+        detectLanguage(of: tab)
         scheduleSave()
     }
 

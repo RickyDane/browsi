@@ -2,7 +2,7 @@ import SwiftUI
 import WebKit
 
 enum SettingsPane: String, CaseIterable, Identifiable {
-    case profile, general, appearance, tabs, privacy, passwords, extensions, websites, downloads, advanced
+    case profile, general, appearance, tabs, privacy, passwords, extensions, websites, watched, downloads, advanced
     var id: String { rawValue }
 
     var title: String {
@@ -15,6 +15,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .passwords: "Passwords"
         case .extensions: "Extensions"
         case .websites: "Websites"
+        case .watched: "Watched Pages"
         case .downloads: "Downloads"
         case .advanced: "Advanced"
         }
@@ -30,15 +31,18 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .passwords: "key.fill"
         case .extensions: "puzzlepiece.extension.fill"
         case .websites: "globe"
+        case .watched: "eye.fill"
         case .downloads: "arrow.down.circle.fill"
         case .advanced: "wrench.and.screwdriver.fill"
         }
     }
 
     /// Opens the Settings window on this pane.
-    @MainActor static func open(_ pane: SettingsPane) {
+    /// `showSettingsWindow:` is ignored on macOS 14+, so this goes through SwiftUI's `openSettings`.
+    @MainActor static func open(_ pane: SettingsPane, with openSettings: OpenSettingsAction) {
         UserDefaults.standard.set(pane.rawValue, forKey: "settingsTab")
-        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        NSApp.activate()
+        openSettings()
     }
 
     var color: Color {
@@ -51,6 +55,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .passwords: .orange
         case .extensions: .cyan
         case .websites: .teal
+        case .watched: .mint
         case .downloads: .green
         case .advanced: .pink
         }
@@ -90,6 +95,7 @@ struct SettingsView: View {
                 case .passwords: PasswordsPane()
                 case .extensions: ExtensionsPane()
                 case .websites: WebsitesPane()
+                case .watched: WatchedPagesPane()
                 case .downloads: DownloadsPane()
                 case .advanced: AdvancedPane()
                 }
@@ -227,6 +233,12 @@ private struct AppearancePane: View {
                     ForEach(TabDensity.allCases) { Text($0.name).tag($0) }
                 }
                 Toggle("Dim suspended tabs", isOn: $prefs.showSuspendedIndicator)
+                Toggle(isOn: $prefs.smartTabTitles) {
+                    Label("Smart tab titles: shorten long page titles in the sidebar", systemImage: "apple.intelligence")
+                    Text(SmartRenamer.status == .available
+                         ? "Uses Apple Intelligence on this Mac. Hover a tab to see its full title."
+                         : "Apple Intelligence is off, so titles are only trimmed of site names.")
+                }
                 Toggle("Show full URL in address bar", isOn: $prefs.showFullURL)
             }
             Section("Window") {
@@ -241,7 +253,7 @@ private struct AppearancePane: View {
                 Toggle("Edge-to-edge web content", isOn: $prefs.edgeToEdgeContent)
             }
             Section("Motion") {
-                Toggle("Wave impact on “Sign in with Apple” and passkey buttons", isOn: $prefs.loginImpactAnimation)
+                Toggle("Cipher wave on “Sign in with Apple” and passkey buttons", isOn: $prefs.loginImpactAnimation)
                 Toggle("Reduce animations", isOn: $prefs.reduceAnimations)
                 Text("Browsi also follows the system “Reduce motion” accessibility setting.")
                     .font(.caption).foregroundStyle(.secondary)
@@ -436,6 +448,8 @@ private struct PasswordsPane: View {
                 Toggle("Offer to save passwords", isOn: $prefs.offerToSavePasswords)
                 Toggle("AutoFill saved passwords", isOn: $prefs.autofillPasswords)
                 Toggle("Require Touch ID or password to AutoFill", isOn: $prefs.requireAuthToFill)
+                Toggle("Show “Sign in with Apple” in a native sheet", isOn: $prefs.appleSignInSheet)
+                    .help("Apple’s sign-in opens over the page instead of replacing it, and your saved Apple ID is filled in after Touch ID or your password.")
                 Picker("Stay unlocked for", selection: $prefs.authGracePeriod) {
                     Text("Ask every time").tag(0)
                     Text("1 minute").tag(60)
@@ -504,6 +518,21 @@ private struct WebsitesPane: View {
                 Text("Content")
             } footer: {
                 NewTabsNote()
+            }
+            Section {
+                Toggle("Offer to translate pages in other languages", isOn: $prefs.offerTranslation)
+                if !prefs.alwaysTranslate.isEmpty {
+                    ForEach(prefs.alwaysTranslate.sorted(), id: \.self) { lang in
+                        LabeledContent("Always translate \(TranslationLanguages.displayName(lang))") {
+                            Button("Remove") { prefs.alwaysTranslate.remove(lang) }
+                        }
+                    }
+                }
+            } header: {
+                Text("Translation")
+            } footer: {
+                Text("Pages are translated on this Mac with Apple’s Translation framework; nothing is sent to a server. Languages are downloaded the first time you use them (System Settings › General › Language & Region › Translation Languages).")
+                    .font(.caption).foregroundStyle(.secondary)
             }
         }
     }

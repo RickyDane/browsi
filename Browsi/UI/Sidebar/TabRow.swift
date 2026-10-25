@@ -14,7 +14,7 @@ struct FaviconView: View {
                     .clipShape(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
                     .transition(.scale.combined(with: .opacity))
             } else {
-                Image(systemName: tab.isSuspended && Preferences.shared.showSuspendedIndicator ? "moon.zzz.fill" : "globe")
+                Image(systemName: tab.showsAsleep && Preferences.shared.showSuspendedIndicator ? "moon.zzz.fill" : "globe")
                     .font(.system(size: size * 0.8))
                     .foregroundStyle(.secondary)
                     .symbolEffect(.pulse, options: .repeating, isActive: tab.isLoading)
@@ -36,10 +36,10 @@ struct TabRow: View {
     var body: some View {
         HStack(spacing: 9) {
             FaviconView(tab: tab)
-            Text(tab.displayTitle)
+            Text(tab.sidebarTitle)
                 .font(.system(size: 13, weight: isSelected ? .medium : .regular))
                 .lineLimit(1)
-                .foregroundStyle(tab.isSuspended && !isSelected && Preferences.shared.showSuspendedIndicator ? .secondary : .primary)
+                .foregroundStyle(tab.showsAsleep && !isSelected && Preferences.shared.showSuspendedIndicator ? .secondary : .primary)
                 .contentTransition(.interpolate)
             Spacer(minLength: 0)
             if tab.isInFloatingPlayer {
@@ -79,6 +79,10 @@ struct TabRow: View {
             MiddleClickCloser.shared.hover(tab.id, h)
         }
         .onTapGesture { browser.select(tab) }
+        .help(tab.sidebarTitle != tab.displayTitle ? tab.displayTitle : "")
+        .task(id: "\(tab.title)|\(tab.url?.host() ?? "")|\(Preferences.shared.smartTabTitles)") {
+            SmartTitleService.shared.refresh(tab)
+        }
         .draggable(tab.id.uuidString) { DragPreview(tab: tab) }
         .contextMenu { TabContextMenu(tab: tab) }
     }
@@ -87,7 +91,7 @@ struct TabRow: View {
 struct DragPreview: View {
     let tab: Tab
     var body: some View {
-        HStack { FaviconView(tab: tab); Text(tab.displayTitle).lineLimit(1) }
+        HStack { FaviconView(tab: tab); Text(tab.sidebarTitle).lineLimit(1) }
             .padding(8)
             .glassEffect(.regular, in: .capsule)
     }
@@ -100,11 +104,7 @@ struct TabContextMenu: View {
     var body: some View {
         Button(tab.isPinned ? "Unpin Tab" : "Pin Tab") { browser.togglePin(tab) }
         Button("Duplicate Tab") { if let u = tab.url { browser.newTab(url: u, background: true, after: tab) } }
-        Button("Copy Link") {
-            guard let u = tab.url else { return }
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(u.absoluteString, forType: .string)
-        }
+        Button("Copy Link") { browser.copyURL(of: tab) }
         Menu("Move to Space") {
             ForEach(browser.spaces) { s in
                 Button(s.name) { move(to: s) }.disabled(browser.space(of: tab) === s)

@@ -13,13 +13,44 @@ struct AppCommands: Commands {
             Divider()
             Button("New Space") { browser.addSpace() }.keyboardShortcut("n", modifiers: [.command, .shift])
             Divider()
-            Button("Close Tab") { browser.closeSelectedTab() }.keyboardShortcut("w")
+            Button("Copy URL") { browser.copyURL() }
+                .keyboardShortcut("c", modifiers: [.command, .shift])
+                .disabled(browser.selectedTab?.url == nil)
+            Divider()
+            Button("Close Tab"){ browser.closeSelectedTab() }.keyboardShortcut("w")
+        }
+
+        CommandGroup(replacing: .textEditing) {
+            Button("Find…") { browser.openFind(.text) }.keyboardShortcut("f")
+            Button("Ask the Page…") { browser.openFind(.ask) }.keyboardShortcut("f", modifiers: [.command, .shift])
+            Button("Find Next") { browser.findNext(forward: true) }.keyboardShortcut("g")
+            Button("Find Previous") { browser.findNext(forward: false) }.keyboardShortcut("g", modifiers: [.command, .shift])
+        }
+
+        CommandMenu("Page") {
+            Button(browser.selectedWebTab.map { browser.translator(for: $0).isTranslated } == true ? "Show Original" : "Translate Page") {
+                browser.toggleTranslation()
+            }
+            .keyboardShortcut("t", modifiers: [.command, .option])
+            .disabled(browser.selectedWebTab == nil)
+            Button(PageWatcher.shared.isWatching(browser.selectedTab?.url) ? "Edit Page Watch…" : "Watch Page for Changes…") {
+                browser.showWatchSetup()
+            }
+            .disabled(browser.selectedWebTab == nil)
+            Divider()
+            Button("Add Event to Calendar") { browser.startPageAction(.calendar) }.disabled(browser.selectedWebTab == nil)
+            Button("Extract Table as CSV") { browser.startPageAction(.table) }.disabled(browser.selectedWebTab == nil)
+            Button("Compare Open Tabs") { browser.startPageAction(.compare) }.disabled(browser.selectedWebTab == nil)
         }
 
         CommandGroup(after: .sidebar) {
             Button("Toggle Sidebar") { withAnimation(Motion.snappy) { browser.sidebarVisible.toggle() } }
                 .keyboardShortcut("s")
             Button("Downloads") { browser.toggleDownloads() }.keyboardShortcut("j")
+            Button("Summarize Page") { browser.togglePageAssistant(.summary) }
+                .keyboardShortcut("s", modifiers: [.command, .shift])
+            Button("Ask About Page") { browser.togglePageAssistant(.chat) }
+                .keyboardShortcut("e", modifiers: [.command, .shift])
             Divider()
             Button("Reload Page") { browser.selectedTab?.controller?.webView.reload() }.keyboardShortcut("r")
             Button("Reload Ignoring Cache") { browser.selectedTab?.controller?.webView.reloadFromOrigin() }
@@ -46,8 +77,7 @@ struct AppCommands: Commands {
         CommandMenu("Tabs") {
             Button("Next Tab") { browser.selectAdjacentTab(1) }.keyboardShortcut("]", modifiers: [.command, .shift])
             Button("Previous Tab") { browser.selectAdjacentTab(-1) }.keyboardShortcut("[", modifiers: [.command, .shift])
-            Button("Next Tab") { browser.selectAdjacentTab(1) }.keyboardShortcut(.tab, modifiers: .control)
-            Button("Previous Tab") { browser.selectAdjacentTab(-1) }.keyboardShortcut(.tab, modifiers: [.control, .shift])
+            Button("Switch to Last Tab") { browser.selectPreviousTab() }.keyboardShortcut(.tab, modifiers: .control)
             Divider()
             ForEach(1..<10) { i in
                 Button(i == 9 ? "Last Tab" : "Tab \(i)") { browser.selectTab(atIndex: i - 1) }
