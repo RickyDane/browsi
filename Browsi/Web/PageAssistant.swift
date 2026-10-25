@@ -34,18 +34,17 @@ nonisolated enum PageText {
     }
 
     /// Picks passages in page order until `budget` characters are used.
-    /// With a question, passages sharing its words are preferred (the page's opening is always kept).
+    /// With a question, the most relevant passages are preferred (the page's opening is always kept).
     static func select(_ passages: [PagePassage], budget: Int, question: String? = nil) -> [PagePassage] {
         guard passages.reduce(0, { $0 + $1.text.count }) > budget else { return passages }
         var ranked = passages
         if let question {
-            let terms = Set(words(question).filter { $0.count >= 3 })
-            func score(_ p: PagePassage) -> Int {
-                let ws = words(p.text)
-                return ws.reduce(0) { $0 + (terms.contains($1) ? 1 : 0) }
+            let scores = relevance(passages, question: question)
+            let opening = Array(passages.prefix(1))
+            let rest = passages.dropFirst(1).sorted {
+                let a = scores[$0.number] ?? 0, b = scores[$1.number] ?? 0
+                return a != b ? a > b : $0.number < $1.number
             }
-            let opening = Array(passages.prefix(2))
-            let rest = passages.dropFirst(2).sorted { score($0) > score($1) }
             ranked = opening + rest
         }
         var used = 0
@@ -56,6 +55,59 @@ nonisolated enum PageText {
         }
         return picked.sorted { $0.number < $1.number }
     }
+
+    /// How well each passage matches the question (passage number → score; 0 or missing = no match).
+    /// Stop words are ignored, words are lightly stemmed ("launched" → "launch"), each term counts once per
+    /// passage and is weighted by how rare it is on the page, so "primary mirror" beats passages full of "the".
+    /// Questions about a time or an amount also favour passages with dates or numbers.
+    static func relevance(_ passages: [PagePassage], question: String) -> [Int: Double] {
+        let qWords = words(question)
+        let terms = Set(qWords.filter { $0.count >= 3 && !stopWords.contains($0) }.map(stem))
+        let wantsDate = qWords.contains { ["when", "year", "date", "wann", "jahr", "datum"].contains($0) }
+        let wantsAmount = zip(qWords, qWords.dropFirst()).contains { a, b in
+            ["how", "wie"].contains(a) && ["big", "large", "many", "much", "long", "tall", "far", "old", "heavy",
+                                            "fast", "high", "wide", "deep", "small", "groß", "viele", "viel", "lang",
+                                            "hoch", "alt", "weit", "schwer", "schnell"].contains(b)
+        } || qWords.contains { ["size", "cost", "price", "weight", "diameter", "height", "length", "distance",
+                                "größe", "kosten", "preis", "gewicht"].contains($0) }
+        guard !terms.isEmpty || wantsDate || wantsAmount else { return [:] }
+        let stems = passages.map { Set(words($0.text).map(stem)) }
+        let n = Double(passages.count)
+        var idf: [String: Double] = [:]
+        for t in terms {
+            let df = Double(stems.filter { $0.contains(t) }.count)
+            idf[t] = log((n + 1) / (df + 0.5))
+        }
+        var scores: [Int: Double] = [:]
+        for (p, set) in zip(passages, stems) {
+            var score = terms.reduce(0.0) { $0 + (set.contains($1) ? max(idf[$1] ?? 0, 0.1) : 0) }
+            if score > 0 || terms.isEmpty {
+                if wantsDate, p.text.contains(/\b(1[5-9]|20)\d{2}\b/) { score += 0.8 }
+                if wantsAmount, p.text.contains(/\d/) { score += 0.5 }
+            }
+            if score > 0 { scores[p.number] = score }
+        }
+        return scores
+    }
+
+    /// Light English/German suffix stripping, enough to match "launched" with "launch" or "mirrors" with "mirror".
+    static func stem(_ w: String) -> String {
+        guard w.count > 4 else { return w }
+        for suffix in ["ingly", "edly", "ing", "ied", "ies", "ed", "es", "ly", "en", "er", "s"] where w.hasSuffix(suffix) {
+            let base = String(w.dropLast(suffix.count))
+            if base.count >= 4 { return suffix == "ies" || suffix == "ied" ? base + "y" : base }
+        }
+        return w
+    }
+
+    static let stopWords: Set<String> = [
+        "the", "and", "for", "are", "was", "were", "what", "where", "when", "who", "whom", "why", "how", "does",
+        "did", "this", "that", "these", "those", "with", "they", "them", "their", "there", "about", "page", "from",
+        "into", "has", "have", "had", "its", "it's", "you", "your", "can", "could", "would", "should", "will",
+        "mention", "mentions", "mentioned", "say", "says", "said", "any", "which", "tell", "explain", "please",
+        "der", "die", "das", "und", "ist", "sind", "wer", "wie", "wann", "warum", "wo", "welche", "welcher",
+        "ein", "eine", "einen", "dem", "den", "des", "mit", "von", "für", "auf", "über", "seite",
+    ]
 
     static func words(_ s: String) -> [String] {
         s.lowercased().split { !$0.isLetter && !$0.isNumber }.map(String.init)

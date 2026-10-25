@@ -169,6 +169,13 @@ extension TabWebController: WKNavigationDelegate {
         download.delegate = DownloadManager.shared
     }
 
+    /// Context menu › Download Linked File / Image / Video. WebKit only hands these downloads to this
+    /// (private, WKNavigationDelegatePrivate) callback; without it they start with no delegate and go nowhere.
+    @objc(_webView:contextMenuDidCreateDownload:)
+    func webView(_ webView: WKWebView, contextMenuDidCreateDownload download: WKDownload) {
+        download.delegate = DownloadManager.shared
+    }
+
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         sync()
         delegate?.tabDidFinishNavigation(tab)

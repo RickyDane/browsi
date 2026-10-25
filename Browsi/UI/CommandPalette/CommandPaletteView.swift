@@ -203,8 +203,10 @@ enum PaletteResults {
                 browser.open(url: engine.searchURL(for: text), inNewTab: newTab)
             }
             // Strong matches (e.g. a host prefix) stay on top, otherwise searching is the default.
-            let topScore = ranked.first.flatMap { PaletteSearch.score(query: q, title: $0.title, subtitle: $0.subtitle) } ?? 0
-            ranked.insert(search, at: topScore >= 95 ? 1 : 0)
+            let topWins = ranked.first.map {
+                PaletteSearch.outranksWebSearch(query: q, title: $0.title, subtitle: $0.subtitle, kind: $0.kind)
+            } ?? false
+            ranked.insert(search, at: topWins ? 1 : 0)
         }
         return Array(ranked.prefix(limit))
     }

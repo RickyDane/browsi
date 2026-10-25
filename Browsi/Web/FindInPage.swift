@@ -14,22 +14,12 @@ nonisolated enum PageFind {
         return t.split(separator: " ").count >= 3 && starters.contains { t.hasPrefix($0) }
     }
 
-    /// Passages sharing the most words with the question (stop words ignored), best first.
+    /// The passages most relevant to the question (see `PageText.relevance`), best first.
     static func keywordHits(_ passages: [PagePassage], question: String, limit: Int = 4) -> [PagePassage] {
-        let stop: Set<String> = ["the", "and", "for", "are", "was", "what", "where", "when", "who", "why", "how",
-                                 "does", "did", "this", "that", "with", "they", "them", "there", "about", "page",
-                                 "mention", "mentions", "say", "says", "any", "which", "der", "die", "das", "und"]
-        let terms = Set(PageText.words(question).filter { $0.count >= 3 && !stop.contains($0) })
-        guard !terms.isEmpty else { return [] }
-        var scored: [(passage: PagePassage, score: Int)] = []
-        for p in passages {
-            let ws = PageText.words(p.text)
-            let distinct = Set(ws).intersection(terms).count
-            let total = ws.filter { terms.contains($0) }.count
-            if distinct > 0 { scored.append((p, distinct * 10 + total)) }
-        }
-        scored.sort { $0.score != $1.score ? $0.score > $1.score : $0.passage.number < $1.passage.number }
-        return scored.prefix(limit).map(\.passage)
+        let scores = PageText.relevance(passages, question: question)
+        return passages.filter { scores[$0.number] != nil }
+            .sorted { scores[$0.number]! != scores[$1.number]! ? scores[$0.number]! > scores[$1.number]! : $0.number < $1.number }
+            .prefix(limit).map { $0 }
     }
 
     /// Keeps the model's passage numbers that exist, without duplicates, in its order.

@@ -23,7 +23,7 @@ nonisolated enum PaletteSearch {
     static func score(query rawQuery: String, title: String, subtitle: String, subtitleIsAddress: Bool = true) -> Double? {
         let q = rawQuery.lowercased().trimmingCharacters(in: .whitespaces)
         guard !q.isEmpty else { return 1 }
-        let t = title.lowercased()
+        let t = normalizedTitle(title)
         let s = subtitle.lowercased()
         let host = s.replacingOccurrences(of: "https://", with: "").replacingOccurrences(of: "http://", with: "")
             .replacingOccurrences(of: "www.", with: "")
@@ -36,6 +36,24 @@ nonisolated enum PaletteSearch {
         if subtitleIsAddress, host.contains(q) { return 50 }
         if let f = subsequenceScore(q, t) { return 20 + f }
         return nil
+    }
+
+    /// Lowercased, without a trailing "…" / "..." (menu-style command titles), so typing the full
+    /// name counts as an exact match.
+    static func normalizedTitle(_ title: String) -> String {
+        var t = title.lowercased().trimmingCharacters(in: .whitespaces)
+        while t.hasSuffix("…") || t.hasSuffix(".") { t.removeLast() }
+        return t.trimmingCharacters(in: .whitespaces)
+    }
+
+    /// Whether the top result should stay above "Search <engine>": a near-exact title or host match,
+    /// or a command whose name the query mostly spells out ("watch page for chan" → Watch Page for Changes…).
+    static func outranksWebSearch(query: String, title: String, subtitle: String, kind: PaletteKind) -> Bool {
+        let isCommand = kind == .command
+        guard let s = score(query: query, title: title, subtitle: subtitle, subtitleIsAddress: !isCommand) else { return false }
+        if s >= 95 { return true }
+        let q = query.trimmingCharacters(in: .whitespaces)
+        return isCommand && s >= 80 && q.count >= 4 && Double(q.count) >= 0.6 * Double(normalizedTitle(title).count)
     }
 
     /// Fuzzy subsequence match; rewards consecutive runs. Returns 0…20.

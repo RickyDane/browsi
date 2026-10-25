@@ -33,6 +33,9 @@ struct TabRow: View {
     var selectionNamespace: Namespace.ID
     @State private var hovering = false
 
+    /// The full title when the sidebar shows a shortened one (Smart Tab Titles).
+    private var fullTitleHelp: String { tab.sidebarTitle != tab.displayTitle ? tab.displayTitle : "" }
+
     var body: some View {
         HStack(spacing: 9) {
             FaviconView(tab: tab)
@@ -41,6 +44,9 @@ struct TabRow: View {
                 .lineLimit(1)
                 .foregroundStyle(tab.showsAsleep && !isSelected && Preferences.shared.showSuspendedIndicator ? .secondary : .primary)
                 .contentTransition(.interpolate)
+                // Also on the title itself: on the selected row the interactive glass background takes the
+                // hover events, so the row-level tooltip below never shows there.
+                .help(fullTitleHelp)
             Spacer(minLength: 0)
             if tab.isInFloatingPlayer {
                 Image(systemName: "pip.fill").font(.system(size: 10)).foregroundStyle(.secondary)
@@ -79,7 +85,7 @@ struct TabRow: View {
             MiddleClickCloser.shared.hover(tab.id, h)
         }
         .onTapGesture { browser.select(tab) }
-        .help(tab.sidebarTitle != tab.displayTitle ? tab.displayTitle : "")
+        .help(fullTitleHelp)
         .task(id: "\(tab.title)|\(tab.url?.host() ?? "")|\(Preferences.shared.smartTabTitles)") {
             SmartTitleService.shared.refresh(tab)
         }

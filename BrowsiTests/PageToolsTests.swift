@@ -49,6 +49,33 @@ struct TranslationLanguageTests {
         #expect(TranslationLanguages.preservingWhitespace(original: "Oui", translated: "Yes") == "Yes")
     }
 
+    @Test func blocksAreTaggedPerTextNodeAndParsedBack() {
+        let src = TranslationLanguages.taggedSource(["La ", "Forêt-Noire", " est <belle> & grande."])
+        #expect(src == "<t0>La </t0><t1>Forêt-Noire</t1><t2> est &lt;belle&gt; &amp; grande.</t2>")
+        // What Apple's translator returns for such a block (tags kept, text translated in context).
+        let out = "<t0>The </t0><t1>Black Forest</t1><t2>is &lt;beautiful&gt; &amp; big.</t2>"
+        #expect(TranslationLanguages.parseTagged(out, count: 3) == [0: "The ", 1: "Black Forest", 2: "is <beautiful> & big."])
+        // Lost or out-of-range tags are simply missing (those nodes get translated on their own).
+        #expect(TranslationLanguages.parseTagged("<t0>The</t0> Black Forest <t7>x</t7>", count: 3) == [0: "The"])
+        #expect(TranslationLanguages.parseTagged("no tags at all", count: 1).isEmpty)
+        // A dropped first opening tag or last closing tag still maps to the right nodes.
+        #expect(TranslationLanguages.parseTagged("The </t0><t1>Black Forest</t1><t2> is big.", count: 3)
+                == [0: "The ", 1: "Black Forest", 2: " is big."])
+        // Garbled tags never end up on the page.
+        #expect(TranslationLanguages.parseTagged("<t0>similar to </t9><t10>Arduinna</t0><t1>x</t1>", count: 2) == [1: "x"])
+    }
+
+    /// Regression: "de l'" + "Allemagne" → "of the" + "Germany" rendered as "of theGermany".
+    @Test func wordGapsAreRestoredBetweenTranslatedNodes() {
+        let originals = [" situé dans le Sud-Ouest de l'", "Allemagne", ", dans le ", "Land", "Bade-", "Wurtemberg"]
+        let translated = [" located in the Southwest of the", "Germany", ", in the ", "State", "Baden-", "Württemberg"]
+        let fixed = TranslationLanguages.fixWordGaps(translated, originals: originals)
+        #expect(fixed[0] == " located in the Southwest of the ")          // elision → space added
+        #expect(fixed[2] == ", in the ")                                   // already spaced
+        #expect(fixed[4] == "Baden-")                                      // hyphenated word stays joined
+        #expect(TranslationLanguages.fixWordGaps(["The", "dog"], originals: ["Le", "chien"]) == ["The", "dog"])   // source had no gap
+    }
+
     @Test func detectsLanguageFromText() {
         let french = "Bonjour et bienvenue sur notre site. Nous vendons des chaussures faites à la main en France depuis 1950, avec beaucoup d’amour."
         #expect(TranslationLanguages.detect(sample: french, langAttribute: "en") == "fr")

@@ -81,6 +81,25 @@ struct PageAssistantTextTests {
         #expect(PageText.select(Array(ps.prefix(2)), budget: 10_000) == Array(ps.prefix(2)))
     }
 
+    /// Regression: stop words used to dominate ("the" counted on every occurrence) and "launch" didn't match
+    /// "launched", so the passages that answer these questions were dropped.
+    @Test func relevanceIgnoresStopWordsAndStemsWords() {
+        let theHeavy = PagePassage(number: 2, text: String(repeating: "The history of the design of the telescope and the way the team worked on the project. ", count: 4))
+        let mirror = PagePassage(number: 3, text: "Webb's primary mirror consists of 18 hexagonal mirror segments, a 6.5-meter-diameter mirror.")
+        let launch = PagePassage(number: 4, text: "The Webb was launched on 25 December 2021 on an Ariane 5 rocket from Kourou, French Guiana.")
+        let names = PagePassage(number: 5, text: "Names: Next Generation Space Telescope (NGST; 1996–2002).")
+        let ps = [PagePassage(number: 1, text: "Intro."), theHeavy, mirror, launch, names]
+
+        #expect(PageFind.keywordHits(ps, question: "How big is the primary mirror?").first?.number == 3)
+        #expect(PageFind.keywordHits(ps, question: "When did it launch and where from?").first?.number == 4)
+        let picked = PageText.select(ps + (6...30).map { PagePassage(number: $0, text: theHeavy.text) },
+                                     budget: 900, question: "When did it launch?")
+        #expect(picked.contains { $0.number == 4 })
+        #expect(PageText.stem("launched") == "launch")
+        #expect(PageText.stem("mirrors") == "mirror")
+        #expect(PageText.stem("batteries") == "battery")
+    }
+
     @Test func citationsBecomeLinksAndInvalidOnesDisappear() {
         let out = PageText.linkCitations("Bake hot [2]. Feed daily [1, 3]. Made up [9].", valid: [1, 2, 3])
         #expect(out.contains("[\\[2\\]](browsi-cite:2)"))
