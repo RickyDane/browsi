@@ -15,6 +15,8 @@ struct HomeModule: Identifiable, Codable, Equatable {
 final class HomeStore {
     static let shared = HomeStore()
     private(set) var modules: [HomeModule] = []
+    /// Area reserved for the clock + search bar; modules flow around it.
+    @ObservationIgnored var locked: [GridRect] = []
     @ObservationIgnored private let fileURL: URL?
 
     static let presets: [(title: String, url: String, symbol: String)] = [
@@ -37,9 +39,9 @@ final class HomeStore {
         } else if self.fileURL != nil {
             modules = [
                 HomeModule(url: URL(string: "https://news.ycombinator.com")!, title: "Hacker News",
-                           rect: GridRect(col: 0, row: 0, w: 7, h: 6)),
+                           rect: GridRect(col: 0, row: 0, w: 3, h: 7)),
                 HomeModule(url: URL(string: "https://wttr.in/?format=v2")!, title: "Weather",
-                           rect: GridRect(col: 7, row: 0, w: 5, h: 4)),
+                           rect: GridRect(col: 9, row: 0, w: 3, h: 4)),
             ]
         }
     }
@@ -48,7 +50,7 @@ final class HomeStore {
 
     @discardableResult
     func add(url: URL, title: String, w: Int = 4, h: Int = 4) -> HomeModule {
-        let rect = GridLayout.firstFree(w: w, h: h, among: modules.map(\.rect))
+        let rect = GridLayout.firstFree(w: w, h: h, among: modules.map(\.rect) + locked)
         let module = HomeModule(url: url, title: title.isEmpty ? (url.host() ?? url.absoluteString) : title, rect: rect)
         modules.append(module)
         save()
@@ -57,14 +59,19 @@ final class HomeStore {
 
     func remove(_ id: UUID) {
         modules.removeAll { $0.id == id }
-        apply(GridLayout.resolve(modules.map { ($0.id, $0.rect) }, fixedID: nil, fixed: nil))
+        apply(layout())
         HomeWebCache.shared.drop(id)
         save()
     }
 
     /// Layout preview for `id` placed at `rect` (doesn't commit).
     func preview(_ id: UUID, at rect: GridRect) -> [UUID: GridRect] {
-        GridLayout.resolve(modules.map { ($0.id, $0.rect) }, fixedID: id, fixed: rect)
+        GridLayout.resolve(modules.map { ($0.id, $0.rect) }, fixedID: id, fixed: rect, locked: locked)
+    }
+
+    /// Current positions with the reserved area respected (display only; not persisted).
+    func layout() -> [UUID: GridRect] {
+        GridLayout.resolve(modules.map { ($0.id, $0.rect) }, fixedID: nil, fixed: nil, locked: locked)
     }
 
     func commit(_ id: UUID, at rect: GridRect) {

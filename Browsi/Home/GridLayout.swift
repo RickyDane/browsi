@@ -30,20 +30,25 @@ nonisolated enum GridLayout {
     }
 
     /// Returns new rects for all items with `fixedID` placed at `fixed`.
+    /// `locked` rects (e.g. the home search area) never move and nothing may overlap them.
     static func resolve<ID: Hashable>(_ items: [(id: ID, rect: GridRect)], fixedID: ID?, fixed: GridRect?,
-                                      columns: Int = columns) -> [ID: GridRect] {
+                                      locked: [GridRect] = [], columns: Int = columns) -> [ID: GridRect] {
         var placed: [(ID, GridRect)] = []
-        if let fixedID, let fixed { placed.append((fixedID, clamp(fixed, columns: columns))) }
+        if let fixedID, var fixed {
+            fixed = clamp(fixed, columns: columns)
+            while locked.contains(where: { $0.intersects(fixed) }) { fixed.row += 1 }
+            placed.append((fixedID, fixed))
+        }
         let others = items.filter { $0.id != fixedID }
             .sorted { ($0.rect.row, $0.rect.col) < ($1.rect.row, $1.rect.col) }
         for item in others {
             var r = clamp(item.rect, columns: columns)
-            while placed.contains(where: { $0.1.intersects(r) }) { r.row += 1 }
+            while placed.contains(where: { $0.1.intersects(r) }) || locked.contains(where: { $0.intersects(r) }) { r.row += 1 }
             placed.append((item.id, r))
         }
         // Compact upwards, top to bottom (the fixed item compacts too, so it can't float in a gap).
         var result: [ID: GridRect] = [:]
-        var settled: [GridRect] = []
+        var settled: [GridRect] = locked
         for (id, rect) in placed.sorted(by: { ($0.1.row, $0.1.col) < ($1.1.row, $1.1.col) }) {
             var r = rect
             while r.row > 0 {

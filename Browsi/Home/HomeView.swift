@@ -11,71 +11,64 @@ struct HomeView: View {
 
     static let barHeight: CGFloat = 54
 
+    /// The fixed central block (clock + search bar) on the 12-column grid.
+    /// Wide windows: modules sit left, right, above and below it; narrow windows: above and below.
+    static func heroRect(colWidth: CGFloat) -> GridRect {
+        colWidth >= 70 ? GridRect(col: 3, row: 3, w: 6, h: 4) : GridRect(col: 0, row: 3, w: 12, h: 4)
+    }
+
     var body: some View {
         GeometryReader { viewport in
-            let half = max(140, (viewport.size.height - Self.barHeight) / 2)
-            ScrollViewReader { proxy in
-                ScrollView {
-                    VStack(spacing: 0) {
-                        // Upper half: clock, resting just above the bar.
-                        VStack(spacing: 0) {
-                            Spacer(minLength: 16)
-                            header
-                            Spacer().frame(height: 26)
-                        }
-                        .frame(height: half)
-
-                        // The search bar sits exactly in the vertical centre of the page.
-                        HomeSearchBar(search: search)
-
-                        // Lower half: the answer unfolds below the bar; modules peek in at the bottom.
-                        VStack(spacing: 18) {
-                            if search.phase != .idle {
-                                SmartAnswerCard(search: search)
-                                    .transition(BlurScaleTransition(scale: 0.96, blur: 8).combined(with: .move(edge: .top)))
-                            }
-                            Spacer(minLength: 0)
-                            if !store.modules.isEmpty {
-                                Button {
-                                    withAnimation(Motion.smooth) { proxy.scrollTo("modules", anchor: .top) }
-                                } label: {
-                                    Label("Modules", systemImage: "chevron.compact.down")
-                                        .labelStyle(.titleAndIcon)
-                                        .font(.system(size: 11, weight: .semibold))
-                                        .foregroundStyle(.secondary)
-                                }
-                                .buttonStyle(SquishButtonStyle())
-                            }
-                        }
-                        .padding(.top, 18)
-                        .padding(.bottom, 12)
-                        .frame(minHeight: half, alignment: .top)
-
-                        VStack(spacing: 14) {
-                            HStack {
-                                Label("Modules", systemImage: "square.grid.2x2").font(.system(size: 12, weight: .semibold))
-                                    .foregroundStyle(.secondary)
-                                Spacer()
-                                Button { showAdd = true } label: { Label("Add", systemImage: "plus") }
-                                    .buttonStyle(.glass).controlSize(.small)
-                                    .popover(isPresented: $showAdd, arrowEdge: .bottom) { AddModuleView { showAdd = false } }
-                            }
-                            ModuleGrid(store: store)
-                        }
-                        .padding(.top, 20)
-                        .padding(.bottom, 40)
-                        .id("modules")
-                    }
-                    .padding(.horizontal, 28)
-                    .frame(maxWidth: 1400)
-                    .frame(maxWidth: .infinity)
+            let width = max(300, min(viewport.size.width - 56, 1400))
+            let colWidth = HomeGridMetrics.colWidth(for: width)
+            let hero = Self.heroRect(colWidth: colWidth)
+            let heroFrame = HomeGridMetrics.frame(hero, colWidth)
+            // Scroll position 0 shows the search bar exactly in the vertical centre.
+            let topInset = max(16, viewport.size.height / 2 - heroFrame.midY)
+            ScrollView {
+                ModuleGrid(store: store, width: width, hero: hero) {
+                    heroContent
                 }
-                .scrollIndicators(.automatic)
+                .padding(.top, topInset)
+                .padding(.bottom, 40)
+                .frame(maxWidth: .infinity)
             }
+            .scrollIndicators(.automatic)
         }
         .animation(Motion.smooth, value: search.phase)
         .onAppear { HomeWebCache.shared.homeAppeared() }
         .onDisappear { HomeWebCache.shared.homeDisappeared(); search.cancel() }
+    }
+
+    /// Search bar centred in the hero block; clock above, "Add module" and the answer below
+    /// (as overlays, so the bar never moves and the answer can float over modules).
+    private var heroContent: some View {
+        let above = Self.barHeight / 2 + 24   // header bottom sits this far above the bar's centre
+        let below = Self.barHeight / 2 + 16   // answer / add button top sits this far below it
+        return HomeSearchBar(search: search)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .overlay(alignment: .center) {
+                header
+                    .fixedSize()
+                    .alignmentGuide(VerticalAlignment.center) { $0[.bottom] + above }
+                    .allowsHitTesting(false)
+            }
+            .overlay(alignment: .center) {
+                VStack(spacing: 14) {
+                    if search.phase != .idle {
+                        SmartAnswerCard(search: search)
+                            .transition(BlurScaleTransition(scale: 0.96, blur: 8).combined(with: .move(edge: .top)))
+                    } else {
+                        Button { showAdd = true } label: { Label("Add Module", systemImage: "plus") }
+                            .buttonStyle(.glass).controlSize(.small)
+                            .popover(isPresented: $showAdd, arrowEdge: .bottom) { AddModuleView { showAdd = false } }
+                            .transition(.opacity)
+                    }
+                }
+                .frame(width: 720)
+                .fixedSize(horizontal: false, vertical: true)
+                .alignmentGuide(VerticalAlignment.center) { $0[.top] - below }
+            }
     }
 
     private var header: some View {
@@ -298,72 +291,77 @@ private struct ShimmerLines: View {
 
 // MARK: - Grid
 
-private struct ModuleGrid: View {
+private struct ModuleGrid<Hero: View>: View {
     let store: HomeStore
-    static let rowHeight: CGFloat = 64
-    static let gap: CGFloat = 12
+    let width: CGFloat
+    let hero: GridRect
+    @ViewBuilder let heroContent: () -> Hero
+    static var rowHeight: CGFloat { HomeGridMetrics.rowHeight }
+    static var gap: CGFloat { HomeGridMetrics.gap }
 
     /// In-flight drag/resize: the module, its live rect in points, and the snapped target.
     @State private var active: (id: UUID, frame: CGRect, target: GridRect)?
     @State private var preview: [UUID: GridRect] = [:]
 
+    private var colWidth: CGFloat { HomeGridMetrics.colWidth(for: width) }
+    private func frame(_ r: GridRect, _ colWidth: CGFloat) -> CGRect { HomeGridMetrics.frame(r, colWidth) }
+
     var body: some View {
-        GeometryReader { geo in
-            let colWidth = (geo.size.width - Self.gap * CGFloat(GridLayout.columns - 1)) / CGFloat(GridLayout.columns)
-            ZStack(alignment: .topLeading) {
-                if let active {
-                    // Snapped landing spot.
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(.primary.opacity(0.08))
-                        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [6, 5])).foregroundStyle(.secondary))
-                        .frame(width: frame(active.target, colWidth).width, height: frame(active.target, colWidth).height)
-                        .offset(x: frame(active.target, colWidth).minX, y: frame(active.target, colWidth).minY)
-                        .animation(Motion.snappy, value: active.target)
-                }
-                ForEach(store.modules) { module in
-                    let isActive = active?.id == module.id
-                    let rect = isActive ? active!.frame : frame(preview[module.id] ?? module.rect, colWidth)
-                    ModuleCard(module: module, isActive: isActive,
-                               onMove: { translation, ended in
-                                   drag(module, translation: translation, ended: ended, colWidth: colWidth, resize: false)
-                               },
-                               onResize: { translation, ended in
-                                   drag(module, translation: translation, ended: ended, colWidth: colWidth, resize: true)
-                               })
-                        .frame(width: rect.width, height: rect.height)
-                        .offset(x: rect.minX, y: rect.minY)
-                        .zIndex(isActive ? 10 : 0)
-                        .animation(isActive ? nil : Motion.snappy, value: rect)
-                        .transition(.scale(scale: 0.85).combined(with: .opacity))
-                }
-                if store.modules.isEmpty {
-                    ContentUnavailableView("No modules yet", systemImage: "square.grid.2x2",
-                                           description: Text("Add web pages with “Add” and arrange them however you like."))
-                        .frame(width: geo.size.width, height: 260)
-                }
+        let _ = (store.locked = [hero])
+        let layout = store.layout()
+        let heroFrame = frame(hero, colWidth)
+        ZStack(alignment: .topLeading) {
+            if let active {
+                // Snapped landing spot.
+                let f = frame(active.target, colWidth)
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(.primary.opacity(0.08))
+                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [6, 5])).foregroundStyle(.secondary))
+                    .frame(width: f.width, height: f.height)
+                    .offset(x: f.minX, y: f.minY)
+                    .animation(Motion.snappy, value: active.target)
             }
+            ForEach(store.modules) { module in
+                let isActive = active?.id == module.id
+                let rect = isActive ? active!.frame
+                    : frame(preview[module.id] ?? layout[module.id] ?? module.rect, colWidth)
+                ModuleCard(module: module, isActive: isActive,
+                           onMove: { translation, ended in
+                               drag(module, from: layout[module.id] ?? module.rect, translation: translation,
+                                    ended: ended, resize: false)
+                           },
+                           onResize: { translation, ended in
+                               drag(module, from: layout[module.id] ?? module.rect, translation: translation,
+                                    ended: ended, resize: true)
+                           })
+                    .frame(width: rect.width, height: rect.height)
+                    .offset(x: rect.minX, y: rect.minY)
+                    .zIndex(isActive ? 10 : 0)
+                    .animation(isActive ? nil : Motion.snappy, value: rect)
+                    .transition(.scale(scale: 0.85).combined(with: .opacity))
+            }
+            heroContent()
+                .frame(width: heroFrame.width, height: heroFrame.height)
+                .offset(x: heroFrame.minX, y: heroFrame.minY)
+                .zIndex(5)
         }
-        .frame(height: max(260, CGFloat(displayRows) * (Self.rowHeight + Self.gap)))
+        .frame(width: width, height: CGFloat(displayRows(layout)) * (Self.rowHeight + Self.gap), alignment: .topLeading)
         .animation(Motion.snappy, value: store.modules.map(\.id))
+        .animation(Motion.snappy, value: hero)
     }
 
-    private var displayRows: Int {
-        let all = store.modules.map { preview[$0.id] ?? $0.rect } + (active.map { [$0.target] } ?? [])
+    private func displayRows(_ layout: [UUID: GridRect]) -> Int {
+        let all = store.modules.map { preview[$0.id] ?? layout[$0.id] ?? $0.rect } + [hero]
+            + (active.map { [$0.target] } ?? [])
         return (all.map { $0.row + $0.h }.max() ?? 0) + (active == nil ? 0 : 2)
     }
 
-    private func frame(_ r: GridRect, _ colWidth: CGFloat) -> CGRect {
-        CGRect(x: CGFloat(r.col) * (colWidth + Self.gap), y: CGFloat(r.row) * (Self.rowHeight + Self.gap),
-               width: CGFloat(r.w) * colWidth + CGFloat(r.w - 1) * Self.gap,
-               height: CGFloat(r.h) * Self.rowHeight + CGFloat(r.h - 1) * Self.gap)
-    }
-
-    private func drag(_ module: HomeModule, translation: CGSize, ended: Bool, colWidth: CGFloat, resize: Bool) {
-        let start = frame(module.rect, colWidth)
+    private func drag(_ module: HomeModule, from current: GridRect, translation: CGSize, ended: Bool, resize: Bool) {
+        let start = frame(current, colWidth)
         let stepX = colWidth + Self.gap, stepY = Self.rowHeight + Self.gap
         var live = start
-        var target = module.rect
+        var target = current
         if resize {
             live.size.width = max(start.width + translation.width, colWidth * 2)
             live.size.height = max(start.height + translation.height, Self.rowHeight * 2)
@@ -524,5 +522,21 @@ private struct AddModuleView: View {
     private func add(_ url: URL, _ title: String) {
         withAnimation(Motion.bouncy) { _ = HomeStore.shared.add(url: url, title: title) }
         done()
+    }
+}
+
+/// Point geometry of the home grid.
+enum HomeGridMetrics {
+    static let rowHeight: CGFloat = 64
+    static let gap: CGFloat = 12
+
+    static func colWidth(for width: CGFloat) -> CGFloat {
+        (width - gap * CGFloat(GridLayout.columns - 1)) / CGFloat(GridLayout.columns)
+    }
+
+    static func frame(_ r: GridRect, _ colWidth: CGFloat) -> CGRect {
+        CGRect(x: CGFloat(r.col) * (colWidth + gap), y: CGFloat(r.row) * (rowHeight + gap),
+               width: CGFloat(r.w) * colWidth + CGFloat(r.w - 1) * gap,
+               height: CGFloat(r.h) * rowHeight + CGFloat(r.h - 1) * gap)
     }
 }

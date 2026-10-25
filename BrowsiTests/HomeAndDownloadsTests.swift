@@ -30,6 +30,17 @@ struct GridLayoutTests {
         for i in rects.indices { for j in rects.indices where i < j { #expect(!rects[i].intersects(rects[j])) } }
     }
 
+    @Test func lockedAreaIsNeverCoveredOrMoved() {
+        let hero = R(col: 3, row: 3, w: 6, h: 4)
+        let items: [(id: String, rect: R)] = [("a", R(col: 2, row: 2, w: 4, h: 3)), ("side", R(col: 0, row: 4, w: 3, h: 3))]
+        let out = GridLayout.resolve(items, fixedID: nil, fixed: nil, locked: [hero])
+        for r in out.values { #expect(!r.intersects(hero)) }
+        #expect(out["side"]?.col == 0, "modules beside the search area stay beside it")
+        // Dragging onto the hero lands just below it instead.
+        let moved = GridLayout.resolve(items, fixedID: "a", fixed: R(col: 4, row: 4, w: 4, h: 2), locked: [hero])
+        #expect(moved["a"].map { !$0.intersects(hero) } == true)
+    }
+
     @Test func firstFreeFindsHole() {
         let r = GridLayout.firstFree(w: 4, h: 2, among: [R(col: 0, row: 0, w: 8, h: 2)])
         #expect(r == R(col: 8, row: 0, w: 4, h: 2))
