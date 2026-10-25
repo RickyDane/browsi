@@ -7,7 +7,9 @@ struct FaviconView: View {
 
     var body: some View {
         ZStack {
-            if let icon = tab.favicon {
+            if tab.isHome {
+                Image(systemName: "house.fill").font(.system(size: size * 0.8)).foregroundStyle(.secondary)
+            } else if let icon = tab.favicon {
                 Image(nsImage: icon).resizable().interpolation(.high)
                     .clipShape(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
                     .transition(.scale.combined(with: .opacity))
@@ -109,7 +111,12 @@ struct TabContextMenu: View {
             }
         }
         Divider()
-        Button("Close Tab") { browser.close(tab) }
+        if tab.isPinned {
+            Button("Close Tab (Keep Pinned)") { browser.close(tab) }
+            Button("Remove Pinned Tab", role: .destructive) { browser.close(tab, removePinned: true) }
+        } else {
+            Button("Close Tab") { browser.close(tab) }
+        }
     }
 
     private func move(to target: Space) {

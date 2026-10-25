@@ -5,7 +5,7 @@ struct AppCommands: Commands {
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
-            Button("New Tab") { browser.palette = .newTab }.keyboardShortcut("t")
+            Button("New Tab") { browser.newHomeTab() }.keyboardShortcut("t")
             Button("Open Location…") { browser.palette = .editCurrent }.keyboardShortcut("l")
             Button("Command Palette…") { browser.palette = .newTab }.keyboardShortcut("k")
             Button("Reopen Closed Tab") { browser.reopenClosedTab() }.keyboardShortcut("t", modifiers: [.command, .shift])

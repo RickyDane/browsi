@@ -29,6 +29,8 @@ private struct PinnedTile: View {
 
     var body: some View {
         FaviconView(tab: tab, size: 20)
+            .opacity(tab.isSuspended && !isSelected ? 0.55 : 1)
+            .saturation(tab.isSuspended && !isSelected ? 0.4 : 1)
             .frame(maxWidth: .infinity)
             .frame(height: 44)
             .background {

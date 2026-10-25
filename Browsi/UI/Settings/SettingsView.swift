@@ -126,6 +126,10 @@ private struct GeneralPane: View {
                 Picker("Search engine", selection: $prefs.searchEngine) {
                     ForEach(SearchEngine.allCases) { Text($0.name).tag($0) }
                 }
+                Toggle(isOn: $prefs.homeSmartAnswers) {
+                    Label("Smart answers on the home page (Apple Intelligence)", systemImage: "apple.intelligence")
+                }
+                .disabled(SmartRenamer.status != .available)
             }
             Section("Startup & Quit") {
                 Toggle("Restore spaces and tabs from last session", isOn: $prefs.restoreSession)

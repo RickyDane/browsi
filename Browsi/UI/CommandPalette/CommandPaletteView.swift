@@ -12,6 +12,8 @@ struct PaletteItem: Identifiable {
 }
 
 struct CommandPaletteView: View {
+    static let inputHeight: CGFloat = 56
+    var maxResultsHeight: CGFloat = 400
     @Environment(BrowserState.self) private var browser
     @Environment(\.openSettings) private var openSettings
     @State private var query = ""
@@ -44,7 +46,7 @@ struct CommandPaletteView: View {
                 }
             }
             .padding(.horizontal, 18)
-            .frame(height: 56)
+            .frame(height: Self.inputHeight)
 
             if !results.isEmpty {
                 Divider().opacity(0.5)
@@ -60,7 +62,7 @@ struct CommandPaletteView: View {
                     .padding(8)
                 }
                 .scrollIndicators(.never)
-                .frame(maxHeight: 400)
+                .frame(maxHeight: min(400, maxResultsHeight))
                 .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -70,7 +72,9 @@ struct CommandPaletteView: View {
         .animation(Motion.snappy, value: results.map(\.id))
         .animation(Motion.snappy, value: selection)
         .onAppear {
-            if browser.palette == .editCurrent { query = browser.selectedTab?.url?.absoluteString ?? "" }
+            if browser.palette == .editCurrent, browser.selectedTab?.isHome == false {
+                query = browser.selectedTab?.url?.absoluteString ?? ""
+            }
             refresh()
             DispatchQueue.main.async { focused = true }
         }

@@ -14,6 +14,8 @@ final class Tab: Identifiable {
     var canGoForward = false
     var isSecure = false
     var isPinned: Bool
+    /// The address a pinned tab returns to when it is closed (⌘W keeps pinned tabs, unloaded).
+    var pinnedURL: URL?
     /// True while the tab's web view lives in the floating video window.
     var isInFloatingPlayer = false
     var lastActive = Date()
@@ -29,7 +31,12 @@ final class Tab: Identifiable {
 
     var isSuspended: Bool { controller == nil }
 
+    /// Internal address of the Browsi home page.
+    static let homeURL = URL(string: "browsi:home")!
+    var isHome: Bool { url == Tab.homeURL }
+
     var displayTitle: String {
+        if isHome { return "Home" }
         if !title.isEmpty { return title }
         return url?.host() ?? "New Tab"
     }

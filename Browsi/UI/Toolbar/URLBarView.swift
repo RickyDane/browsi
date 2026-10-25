@@ -6,7 +6,7 @@ struct URLBarView: View {
 
     var body: some View {
         let tab = browser.selectedTab
-        let host = tab?.url?.host()
+        let host = tab?.isHome == true ? nil : tab?.url?.host()
         HStack(spacing: 6) {
             Image(systemName: tab?.isSecure == true ? "lock.fill" : tab?.url == nil ? "magnifyingglass" : "lock.open")
                 .font(.system(size: 10, weight: .semibold))
@@ -52,7 +52,7 @@ struct URLBarView: View {
     }
 
     private func addressText(_ tab: Tab?) -> String? {
-        guard let url = tab?.url else { return nil }
+        guard let url = tab?.url, tab?.isHome == false else { return nil }
         if Preferences.shared.showFullURL { return url.absoluteString }
         return url.host()?.replacingOccurrences(of: "www.", with: "")
     }

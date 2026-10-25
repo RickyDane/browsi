@@ -33,6 +33,7 @@ final class TabSuspender {
     /// Suspends tabs that have been idle longer than the preference (or all background tabs if forced).
     func sweep(force: Bool = false, now: Date = .now) {
         guard let browser else { return }
+        if force { HomeWebCache.shared.purgeIfHidden() }
         let minutes = Preferences.shared.suspendAfterMinutes
         guard force || minutes > 0 else { return }
         let threshold = TimeInterval(minutes * 60)

@@ -35,7 +35,7 @@ struct SidebarView: View {
                     }
                     .help("Drop a tab here to pin it")
 
-                    Button { browser.palette = .newTab } label: {
+                    Button { browser.newHomeTab() } label: {
                         HStack(spacing: 9) {
                             Image(systemName: "plus").font(.system(size: 12, weight: .semibold))
                                 .rotationEffect(.degrees(newTabHover && !Motion.reduceMotion ? 90 : 0))
@@ -77,9 +77,15 @@ struct SidebarView: View {
             .transition(.push(from: browser.spaceSwitchDirection > 0 ? .trailing : .leading))
             .offset(x: swipe.offset)
 
-            SpaceSwitcher()
-                .frame(maxWidth: .infinity)
-                .padding(.bottom, 10)
+            HStack {
+                DownloadsButton()
+                Spacer(minLength: 4)
+                SpaceSwitcher()
+                Spacer(minLength: 4)
+                Color.clear.frame(width: 22, height: 22)
+            }
+            .padding(.horizontal, 4)
+            .padding(.bottom, 10)
         }
         .padding(.horizontal, 10)
         .clipped()

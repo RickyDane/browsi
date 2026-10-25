@@ -64,14 +64,14 @@ enum SmartRenamer {
     }
 
     /// Returns a new file name (with the original extension) or nil to keep the original.
-    static func suggestFileName(for context: DownloadContext) async -> String? {
+    static func suggestFileName(for context: DownloadContext, force: Bool = false) async -> String? {
         guard status == .available else { return nil }
         let session = LanguageModelSession(instructions: instructions)
         do {
             let response = try await session.respond(to: prompt(for: context), generating: SmartFileName.self,
                                                       options: GenerationOptions(temperature: 0.2))
             let answer = response.content
-            guard answer.shouldRename else { return nil }
+            guard answer.shouldRename || force else { return nil }
             return finalName(suggested: answer.name, original: context.originalName)
         } catch {
             debugLog("smart rename failed: \(error)")

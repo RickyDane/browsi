@@ -6,6 +6,7 @@ nonisolated struct SessionSnapshot: Codable, Sendable {
         var id: UUID
         var url: URL?
         var title: String
+        var pinnedURL: URL?
     }
     struct SpaceState: Codable, Sendable {
         var id: UUID

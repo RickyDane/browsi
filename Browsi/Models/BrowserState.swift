@@ -1,6 +1,7 @@
 import SwiftUI
 import WebKit
 import Observation
+import UniformTypeIdentifiers
 
 enum PaletteMode: Equatable {
     case hidden
@@ -28,6 +29,14 @@ final class BrowserState {
     /// Link Peek preview (⇧-click), shown as a modal over the content.
     var peek: PeekState?
     let floatingPlayer = FloatingPlayer()
+    /// Files currently flying from the click position to the downloads button.
+    var downloadFlights: [DownloadFlight] = []
+    /// Global frame of the sidebar's downloads button (nil while hidden).
+    var downloadsButtonFrame: CGRect?
+    /// Bumped when a flight lands, to bounce the button.
+    var downloadsBounce = 0
+    @ObservationIgnored private var lastClick: (point: CGPoint, time: Date)?
+    @ObservationIgnored private var clickMonitor: Any?
     /// Wave-impact animation currently playing over the content card.
     var impact: LoginImpact?
 
@@ -42,7 +51,11 @@ final class BrowserState {
         if restore, let snap = SessionStore.load(), !snap.spaces.isEmpty {
             spaces = snap.spaces.map { s in
                 Space(id: s.id, name: s.name, symbol: s.symbol, hue: s.hue,
-                      pinnedTabs: s.pinned.map { Tab(id: $0.id, url: $0.url, title: $0.title, isPinned: true) },
+                      pinnedTabs: s.pinned.map {
+                          let t = Tab(id: $0.id, url: $0.url, title: $0.title, isPinned: true)
+                          t.pinnedURL = $0.pinnedURL ?? $0.url
+                          return t
+                      },
                       tabs: s.tabs.map { Tab(id: $0.id, url: $0.url, title: $0.title) },
                       selectedTabID: s.selectedTabID)
             }
@@ -58,6 +71,7 @@ final class BrowserState {
         floatingPlayer.browser = self
         LinkBridge.shared.browser = self
         LoginImpactBridge.shared.browser = self
+        HomeWebCache.shared.browser = self
         WebConfigFactory.passwordBridge.onOfferSave = { [weak self] offer in
             withAnimation(.bouncy) { self?.pendingPasswordSave = offer }
         }
@@ -66,13 +80,14 @@ final class BrowserState {
     func start() {
         suspender.start()
         MiddleClickCloser.shared.install(browser: self)
+        installClickTracker()
         DownloadManager.shared.browser = self
         Task {
             _ = await ContentBlocker.shared.load()
             for tab in allTabs { tab.controller?.applyContentBlocking() }
         }
         if let tab = selectedTab { activate(tab) }
-        else if spaces.allSatisfy({ $0.allTabs.isEmpty }) { palette = .newTab }
+
     }
 
     // MARK: Accessors
@@ -98,7 +113,7 @@ final class BrowserState {
                 space.tabs.insert(tab, at: 0)
             }
         }
-        if background {
+        if background && !tab.isHome {
             tab.controller = TabWebController(tab: tab, delegate: self)
             if let url { tab.controller?.load(url) }
         } else {
@@ -128,7 +143,7 @@ final class BrowserState {
     /// Ensures the tab has a live web view (reviving it if suspended).
     func activate(_ tab: Tab) {
         tab.lastActive = .now
-        guard tab.controller == nil else { return }
+        guard tab.controller == nil, !tab.isHome else { return }
         let c = TabWebController(tab: tab, delegate: self)
         tab.controller = c
         c.restore(interactionState: tab.interactionState, fallback: tab.url)
@@ -146,8 +161,11 @@ final class BrowserState {
         }
     }
 
-    func close(_ tab: Tab) {
+    /// Closes a tab. Pinned tabs stay pinned: they are unloaded and reset to their pinned address,
+    /// unless `removePinned` is set.
+    func close(_ tab: Tab, removePinned: Bool = false) {
         guard let space = space(of: tab) else { return }
+        if tab.isPinned && !removePinned { unloadPinned(tab, in: space); return }
         if let url = tab.url { closedTabs.append((url, space.id)); closedTabs = closedTabs.suffix(30) }
         let ordered = space.allTabs
         let wasSelected = space.selectedTabID == tab.id
@@ -163,8 +181,7 @@ final class BrowserState {
         if wasSelected {
             let remaining = space.allTabs
             if remaining.isEmpty {
-                space.selectedTabID = nil
-                palette = .newTab
+                withAnimation(Motion.snappy) { space.selectedTabID = nil }   // shows the home page
             } else if Preferences.shared.closeTabSelection == .recent,
                       let recent = remaining.max(by: { $0.lastActive < $1.lastActive }) {
                 select(recent)
@@ -174,6 +191,45 @@ final class BrowserState {
         }
         scheduleSave()
     }
+
+    private func unloadPinned(_ tab: Tab, in space: Space) {
+        let wasSelected = space.selectedTabID == tab.id
+        if tab.isInFloatingPlayer { floatingPlayer.close(returnTo: nil) }
+        if peek?.tab === tab { peek = nil }
+        tab.controller?.tearDown()
+        tab.controller = nil
+        tab.interactionState = nil
+        tab.snapshot = nil
+        tab.showsSnapshot = false
+        tab.isLoading = false
+        tab.progress = 0
+        if let home = tab.pinnedURL { tab.url = home }
+        if wasSelected {
+            let others = space.allTabs.filter { $0 !== tab }
+            let loaded = others.filter { !$0.isSuspended || !$0.isPinned }
+            if let next = Preferences.shared.closeTabSelection == .recent
+                ? loaded.max(by: { $0.lastActive < $1.lastActive })
+                : (space.tabs.first ?? loaded.first) {
+                select(next)
+            } else {
+                withAnimation(Motion.snappy) { space.selectedTabID = nil }
+            }
+        }
+        scheduleSave()
+    }
+
+    /// Opens a link chosen on the home page: replaces the selected home tab, otherwise opens a tab.
+    func openFromHome(_ url: URL, background: Bool = false) {
+        if !background, let tab = selectedTab, tab.isHome {
+            navigate(tab, to: url)
+        } else {
+            newTab(url: url, background: background)
+        }
+    }
+
+    /// Opens a new tab showing the Browsi home page.
+    @discardableResult
+    func newHomeTab() -> Tab { newTab(url: Tab.homeURL) }
 
     func closeSelectedTab() {
         if let t = selectedTab { close(t) }
@@ -194,6 +250,7 @@ final class BrowserState {
             } else {
                 space.tabs.removeAll { $0 === tab }
                 tab.isPinned = true
+                tab.pinnedURL = tab.url
                 space.pinnedTabs.append(tab)
             }
         }
@@ -241,11 +298,24 @@ final class BrowserState {
 
     func open(url: URL, inNewTab: Bool) {
         if !inNewTab, let tab = selectedTab {
-            activate(tab)
-            tab.controller?.load(url)
+            navigate(tab, to: url)
         } else {
             newTab(url: url)
         }
+    }
+
+    /// Loads `url` in `tab`, creating its web view if needed (home tabs, suspended tabs).
+    func navigate(_ tab: Tab, to url: URL) {
+        if let controller = tab.controller {
+            controller.load(url)
+        } else {
+            tab.url = url
+            tab.title = ""
+            tab.interactionState = nil
+            tab.snapshot = nil
+            activate(tab)
+        }
+        scheduleSave()
     }
 
     // MARK: Spaces
@@ -285,7 +355,6 @@ final class BrowserState {
         let s = Space(name: spaces.count < Space.palette.count ? n : "Space \(spaces.count + 1)", symbol: sym, hue: hue)
         withAnimation(Motion.bouncy) { spaces.append(s) }
         switchSpace(to: s)
-        palette = .newTab
     }
 
     func delete(space: Space) {
@@ -297,6 +366,41 @@ final class BrowserState {
         space.allTabs.forEach { $0.controller?.tearDown(); $0.controller = nil }
         withAnimation(Motion.snappy) { spaces.removeAll { $0.id == space.id } }
         scheduleSave()
+    }
+
+    // MARK: Download flights
+
+    /// Remembers where the user last clicked in the browser window (top-left origin), so a download
+    /// that starts shortly after can fly from there.
+    private func installClickTracker() {
+        guard clickMonitor == nil else { return }
+        clickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .otherMouseDown, .rightMouseDown]) { [weak self] event in
+            guard let window = event.window, !(window is NSPanel), let content = window.contentView else { return event }
+            let p = CGPoint(x: event.locationInWindow.x, y: content.bounds.height - event.locationInWindow.y)
+            MainActor.assumeIsolated { self?.lastClick = (p, .now) }
+            return event
+        }
+    }
+
+    func recordClick(at point: CGPoint) { lastClick = (point, .now) }
+
+    func launchDownloadFlight(for fileName: String) {
+        let from: CGPoint
+        if let click = lastClick, Date.now.timeIntervalSince(click.time) < 10 {
+            from = click.point
+        } else if let size = NSApp.mainWindow?.contentView?.bounds.size {
+            from = CGPoint(x: size.width / 2, y: size.height / 2)
+        } else {
+            from = CGPoint(x: 600, y: 400)
+        }
+        let type = UTType(filenameExtension: (fileName as NSString).pathExtension) ?? .data
+        let icon = NSWorkspace.shared.icon(for: type)
+        downloadFlights.append(DownloadFlight(from: from, icon: icon, fileName: fileName))
+    }
+
+    func landDownloadFlight(_ id: UUID) {
+        downloadFlights.removeAll { $0.id == id }
+        downloadsBounce += 1
     }
 
     // MARK: Login impact
@@ -415,7 +519,9 @@ final class BrowserState {
     }
 
     func saveSessionNow() {
-        func t(_ tab: Tab) -> SessionSnapshot.TabState { .init(id: tab.id, url: tab.url, title: tab.title) }
+        func t(_ tab: Tab) -> SessionSnapshot.TabState {
+            .init(id: tab.id, url: tab.url, title: tab.title, pinnedURL: tab.pinnedURL)
+        }
         let snap = SessionSnapshot(spaces: spaces.map {
             .init(id: $0.id, name: $0.name, symbol: $0.symbol, hue: $0.hue,
                   pinned: $0.pinnedTabs.map(t), tabs: $0.tabs.map(t), selectedTabID: $0.selectedTabID)
@@ -477,4 +583,11 @@ extension BrowserState: TabEventsDelegate {
     func tabTitleDidChange(_ tab: Tab) {
         if let url = tab.url { library.updateTitle(url: url, title: tab.title) }
     }
+}
+
+struct DownloadFlight: Identifiable {
+    let id = UUID()
+    let from: CGPoint
+    let icon: NSImage
+    let fileName: String
 }

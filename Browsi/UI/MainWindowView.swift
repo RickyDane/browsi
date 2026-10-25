@@ -56,11 +56,14 @@ struct MainWindowView: View {
                     .ignoresSafeArea()
                     .onTapGesture { withAnimation(Motion.snappy) { browser.palette = .hidden } }
                     .transition(.opacity)
-                VStack {
-                    CommandPaletteView()
+                // The input row sits exactly in the window's centre; results unfold below it.
+                GeometryReader { geo in
+                    let inputHeight = CommandPaletteView.inputHeight
+                    let top = max(16, geo.size.height / 2 - inputHeight / 2)
+                    CommandPaletteView(maxResultsHeight: max(120, geo.size.height - top - inputHeight - 24))
                         .id(browser.palette)
-                        .padding(.top, 90)
-                    Spacer()
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, top)
                 }
                 .transition(BlurScaleTransition())
                 .zIndex(10)
@@ -84,6 +87,18 @@ struct MainWindowView: View {
             .padding(.leading, browser.sidebarVisible ? sidebarWidth : 0)
             .zIndex(20)
         }
+        .overlay {
+            // Downloads flying from the click point to the downloads button.
+            GeometryReader { geo in
+                let origin = geo.frame(in: .global).origin
+                let target = browser.downloadsButtonFrame.map { CGPoint(x: $0.midX - origin.x, y: $0.midY - origin.y) }
+                    ?? CGPoint(x: 26, y: geo.size.height - 26)
+                ForEach(browser.downloadFlights) { flight in
+                    DownloadFlightView(flight: flight, target: target)
+                }
+            }
+            .allowsHitTesting(false)
+        }
         .animation(Motion.snappy, value: browser.palette)
         .animation(Motion.snappy, value: browser.sidebarVisible)
         .animation(Motion.snappy, value: prefs.sidebarWidth)
@@ -104,7 +119,7 @@ private struct ContentCard: View {
         let tab = browser.selectedTab
         let radius: CGFloat = edgeToEdge ? 0 : 12
         ZStack(alignment: .top) {
-            if let tab {
+            if let tab, !tab.isHome {
                 Rectangle().fill(.background)
                 WebViewHost(tab: tab)
                 if tab.showsSnapshot, let snap = tab.snapshot {
@@ -119,9 +134,9 @@ private struct ContentCard: View {
                     ImpactOverlay(impact: impact).id(impact.id)
                 }
             } else {
-                // Empty space: let the mesh glow through a frosted card.
+                // Home page: frosted card so the space's gradient glows through.
                 Rectangle().fill(.ultraThinMaterial)
-                EmptyStateView()
+                HomeView().id(tab?.id)
             }
         }
         // No implicit/explicit animation leaks into tab swaps (avoids the page "shifting in").
@@ -130,28 +145,6 @@ private struct ContentCard: View {
         .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(.primary.opacity(edgeToEdge ? 0 : 0.08)))
         .shadow(color: .black.opacity(edgeToEdge ? 0 : 0.14), radius: 14, y: 4)
         .modifier(ImpactShake(trigger: browser.impact?.id))
-    }
-}
-
-private struct EmptyStateView: View {
-    @Environment(BrowserState.self) private var browser
-    @State private var appeared = false
-
-    var body: some View {
-        VStack(spacing: 14) {
-            Image(systemName: browser.selectedSpace.symbol)
-                .font(.system(size: 54, weight: .light))
-                .foregroundStyle(browser.selectedSpace.color.gradient)
-                .symbolEffect(.breathe, options: .repeating)
-                .scaleEffect(appeared ? 1 : 0.6)
-                .opacity(appeared ? 1 : 0)
-            Text(browser.selectedSpace.name).font(.title2.weight(.semibold))
-            Button("New Tab  ⌘T") { browser.palette = .newTab }
-                .buttonStyle(.glass)
-                .controlSize(.large)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onAppear { withAnimation(Motion.bouncy.delay(0.05)) { appeared = true } }
     }
 }
 

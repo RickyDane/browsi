@@ -72,6 +72,7 @@ final class Preferences {
 
     // MARK: General
     var searchEngine: SearchEngine { didSet { d.set(searchEngine.rawValue, forKey: "searchEngine") } }
+    var homeSmartAnswers: Bool { didSet { d.set(homeSmartAnswers, forKey: "homeSmartAnswers") } }
     var restoreSession: Bool { didSet { d.set(restoreSession, forKey: "restoreSession") } }
     var confirmQuit: Bool { didSet { d.set(confirmQuit, forKey: "confirmQuit") } }
 
@@ -142,6 +143,7 @@ final class Preferences {
 
         searchEngine = raw("searchEngine", .duckDuckGo)
         restoreSession = bool("restoreSession", true)
+        homeSmartAnswers = bool("homeSmartAnswers", true)
         confirmQuit = bool("confirmQuit", false)
 
         theme = raw("theme", .system)
@@ -197,7 +199,7 @@ final class Preferences {
             d.removeObject(forKey: key)
         }
         let fresh = Preferences()
-        searchEngine = fresh.searchEngine; restoreSession = fresh.restoreSession; confirmQuit = fresh.confirmQuit
+        searchEngine = fresh.searchEngine; restoreSession = fresh.restoreSession; homeSmartAnswers = fresh.homeSmartAnswers; confirmQuit = fresh.confirmQuit
         theme = fresh.theme; sidebarWidth = fresh.sidebarWidth; tabDensity = fresh.tabDensity
         animatedBackground = fresh.animatedBackground; backgroundIntensity = fresh.backgroundIntensity
         edgeToEdgeContent = fresh.edgeToEdgeContent; reduceAnimations = fresh.reduceAnimations
@@ -226,7 +228,7 @@ final class Preferences {
 enum UserAgent {
     /// Version of the system Safari — the WebKit we run *is* that Safari's engine, so claiming
     /// exactly that version keeps the UA consistent with feature detection (Google sign-in checks this).
-    static let safariVersion: String = {
+    nonisolated static let safariVersion: String = {
         if let v = Bundle(path: "/Applications/Safari.app")?.infoDictionary?["CFBundleShortVersionString"] as? String {
             return v
         }
@@ -234,7 +236,7 @@ enum UserAgent {
         return "\(os.majorVersion).\(os.minorVersion)"
     }()
 
-    static let safari = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/\(safariVersion) Safari/605.1.15"
+    nonisolated static let safari = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/\(safariVersion) Safari/605.1.15"
     static let chrome = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"
     static let firefox = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:144.0) Gecko/20100101 Firefox/144.0"
 
