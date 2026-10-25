@@ -244,3 +244,16 @@ struct RenameMorphTests {
         #expect(mid != old && mid != new)
     }
 }
+
+@MainActor
+struct SharedSuggestionTests {
+    @Test func homeAndPaletteShareResults() {
+        let browser = BrowserState(library: LibraryStore(inMemory: true), restore: false)
+        browser.library.recordVisit(url: URL(string: "https://www.google.com/")!, title: "Google")
+        let results = PaletteResults.build(query: "goog", editingCurrent: false, browser: browser, openSettings: {})
+        #expect(results.contains { $0.kind == .history && $0.title == "Google" })
+        #expect(results.contains { $0.id == "search" })
+        let url = PaletteResults.build(query: "apple.com", editingCurrent: false, browser: browser, openSettings: {})
+        #expect(url.first?.id == "nav")
+    }
+}

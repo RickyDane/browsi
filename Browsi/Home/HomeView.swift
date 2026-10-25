@@ -3,6 +3,7 @@ import SwiftUI
 /// Personal home page: an AI-powered search bar above a grid of live web modules
 /// that can be dragged and resized.
 struct HomeView: View {
+    @State private var homeQuery = ""
     @Environment(BrowserState.self) private var browser
     @State private var store = HomeStore.shared
     @State private var search = SmartSearch()
@@ -32,6 +33,15 @@ struct HomeView: View {
                 .padding(.top, topInset)
                 .padding(.bottom, 40)
                 .frame(maxWidth: .infinity)
+                .background {
+                    // Clicking empty space takes focus away from the search bar.
+                    Color.clear.contentShape(Rectangle())
+                        .onTapGesture { NSApp.keyWindow?.makeFirstResponder(nil) }
+                }
+            }
+            .background {
+                Color.clear.contentShape(Rectangle())
+                    .onTapGesture { NSApp.keyWindow?.makeFirstResponder(nil) }
             }
             .scrollIndicators(.automatic)
         }
@@ -45,7 +55,7 @@ struct HomeView: View {
     private var heroContent: some View {
         let above = Self.barHeight / 2 + 24   // header bottom sits this far above the bar's centre
         let below = Self.barHeight / 2 + 16   // answer / add button top sits this far below it
-        return HomeSearchBar(search: search)
+        return HomeSearchBar(search: search, query: $homeQuery)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .overlay(alignment: .center) {
                 header
@@ -55,7 +65,9 @@ struct HomeView: View {
             }
             .overlay(alignment: .center) {
                 VStack(spacing: 14) {
-                    if search.phase != .idle {
+                    if !homeQuery.isEmpty && search.phase == .idle {
+                        EmptyView()   // suggestions dropdown occupies this space
+                    } else if search.phase != .idle {
                         SmartAnswerCard(search: search)
                             .transition(BlurScaleTransition(scale: 0.96, blur: 8).combined(with: .move(edge: .top)))
                     } else {
@@ -94,8 +106,14 @@ struct HomeView: View {
 private struct HomeSearchBar: View {
     @Environment(BrowserState.self) private var browser
     let search: SmartSearch
-    @State private var query = ""
+    @Binding var query: String
     @FocusState private var focused: Bool
+    @Environment(\.openSettings) private var openSettings
+    @State private var suggestions: [PaletteItem] = []
+    @State private var selection = 0
+    @Namespace private var ns
+
+    private var showsSuggestions: Bool { focused && !suggestions.isEmpty && search.phase == .idle }
 
     var body: some View {
         let engine = Preferences.shared.searchEngine
@@ -117,14 +135,29 @@ private struct HomeSearchBar: View {
                     .textFieldStyle(.plain)
                     .font(.system(size: 18))
                     .focused($focused)
-                    .onSubmit(submit)
-                    .onKeyPress(.escape) { focused = false; return .handled }
+                    .onSubmit { runSelection() }
+                    .onKeyPress(keys: [.return]) { press in
+                        if press.modifiers.contains(.shift) { openWebSearch(); return .handled }
+                        if press.modifiers.contains(.command) { askIntelligence(); return .handled }
+                        runSelection(); return .handled
+                    }
+                    .onKeyPress(.downArrow) { move(1); return .handled }
+                    .onKeyPress(.upArrow) { move(-1); return .handled }
+                    .onKeyPress(.tab) { move(1); return .handled }
+                    .onKeyPress(.escape) {
+                        if !query.isEmpty { query = "" } else { focused = false }
+                        return .handled
+                    }
                 if !query.isEmpty {
-                    Button("Search \(engine.name)") { openWebSearch() }
-                        .buttonStyle(.glass).controlSize(.small)
-                        .keyboardShortcut(.return, modifiers: .command)
-                        .help("⌘↩ searches \(engine.name) directly")
-                        .transition(.scale.combined(with: .opacity))
+                    Button { openWebSearch() } label: {
+                        HStack(spacing: 4) {
+                            Text("Search \(engine.name)")
+                            Text("⇧↩").foregroundStyle(.secondary)
+                        }
+                    }
+                    .buttonStyle(.glass).controlSize(.small)
+                    .help("⇧↩ searches \(engine.name) directly")
+                    .transition(.scale.combined(with: .opacity))
                 }
             }
             .padding(.horizontal, 18)
@@ -151,30 +184,87 @@ private struct HomeSearchBar: View {
         .shadow(color: .black.opacity(focused ? 0.2 : 0.12), radius: focused ? 28 : 18, y: focused ? 14 : 8)
         .animation(Motion.bouncy, value: focused)
         .animation(Motion.snappy, value: query.isEmpty)
+        .overlay(alignment: .top) {
+            // Same suggestions as the command palette, dropping down from the bar.
+            if showsSuggestions {
+                ScrollView {
+                    VStack(spacing: 2) {
+                        ForEach(Array(suggestions.enumerated()), id: \.element.id) { i, item in
+                            PaletteRow(item: item, selected: i == selection, ns: ns)
+                                .onTapGesture { selection = i; runSelection() }
+                                .onHover { if $0 { selection = i } }
+                        }
+                    }
+                    .padding(8)
+                }
+                .scrollIndicators(.never)
+                .frame(maxHeight: 380)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: 720)
+                .glassEffect(.regular, in: .rect(cornerRadius: 18, style: .continuous))
+                .shadow(color: .black.opacity(0.22), radius: 26, y: 12)
+                .offset(y: HomeView.barHeight + 8)
+                .transition(BlurScaleTransition(scale: 0.97, blur: 6).combined(with: .offset(y: -6)))
+                .animation(Motion.snappy, value: selection)
+                .animation(Motion.snappy, value: suggestions.map(\.id))
+            }
+        }
+        .animation(Motion.snappy, value: showsSuggestions)
         .onAppear { DispatchQueue.main.async { focused = true } }
         .onChange(of: browser.homeSearchFocusRequest) {
             // Re-trigger even if already focused so the focus animation plays.
             focused = false
             DispatchQueue.main.async { focused = true }
         }
-        .onChange(of: query) { if $1.isEmpty { search.reset() } }
-    }
-
-    private func submit() {
-        let q = query.trimmingCharacters(in: .whitespaces)
-        guard !q.isEmpty else { return }
-        if case .url(let url)? = URLInputParser.parse(q) {
-            browser.openFromHome(url)
-        } else if SmartSearch.isAvailable && Preferences.shared.homeSmartAnswers {
-            search.run(q, library: browser.library)
-        } else {
-            openWebSearch()
+        .onChange(of: query) {
+            if search.phase != .working { search.reset() }
+            selection = 0
+            refreshSuggestions()
         }
     }
 
+    private func refreshSuggestions() {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { suggestions = []; return }
+        var items = PaletteResults.build(query: q, editingCurrent: false, browser: browser,
+                                         openSettings: { openSettings() }, limit: 8)
+        // Apple Intelligence is one suggestion among the others (⌘↩), right below the top hit.
+        if SmartSearch.isAvailable, Preferences.shared.homeSmartAnswers, case .search? = URLInputParser.parse(q) {
+            let ask = PaletteItem(id: "ask-ai", kind: .search, title: q, subtitle: "", symbol: "apple.intelligence",
+                                  badge: "Ask Apple Intelligence ⌘↩") { [search, browser] in
+                search.run(q, library: browser.library)
+            }
+            items.insert(ask, at: min(1, items.count))
+        }
+        suggestions = items
+    }
+
+    private func move(_ d: Int) {
+        guard !suggestions.isEmpty else { return }
+        selection = (selection + d + suggestions.count) % suggestions.count
+    }
+
+    /// ↩ runs the highlighted suggestion, exactly like the command palette.
+    private func runSelection() {
+        if suggestions.isEmpty { refreshSuggestions() }
+        guard suggestions.indices.contains(selection) else { return }
+        let item = suggestions[selection]
+        if item.id != "ask-ai" { query = "" }
+        item.action()
+    }
+
+    private func askIntelligence() {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { return }
+        if SmartSearch.isAvailable { search.run(q, library: browser.library) } else { openWebSearch() }
+    }
+
+    /// ⇧↩: always a web search on the configured engine, even for things that look like addresses.
     private func openWebSearch() {
-        guard let url = URLInputParser.url(for: query, engine: Preferences.shared.searchEngine) else { return }
-        browser.openFromHome(url)
+        let q = query.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { return }
+        query = ""
+        browser.openFromHome(Preferences.shared.searchEngine.searchURL(for: q))
     }
 }
 

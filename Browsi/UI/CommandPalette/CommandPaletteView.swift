@@ -97,108 +97,13 @@ struct CommandPaletteView: View {
         action()
     }
 
-    // MARK: Building results
-
     private func refresh() {
-        let newTab = browser.palette != .editCurrent
-        let q = query
-        var items: [String: PaletteItem] = [:]
-        var candidates: [PaletteSearch.Candidate<String>] = []
-        func add(_ item: PaletteItem, boost: Double = 0) {
-            items[item.id] = item
-            candidates.append(.init(id: item.id, kind: item.kind, title: item.title, subtitle: item.subtitle, extraBoost: boost))
-        }
-
-        let engine = Preferences.shared.searchEngine
-        let parsed = URLInputParser.parse(q)
-        if case .url(let url)? = parsed, browser.palette != .editCurrent || q != browser.selectedTab?.url?.absoluteString {
-            add(PaletteItem(id: "nav", kind: .navigate, title: url.absoluteString, subtitle: "", symbol: "arrow.up.right.circle.fill",
-                            badge: "Open") { browser.open(url: url, inNewTab: newTab) })
-        }
-
-        for space in browser.spaces {
-            for tab in space.allTabs where tab !== browser.selectedTab || q.isEmpty == false {
-                add(PaletteItem(id: "tab-\(tab.id)", kind: .tab, title: tab.displayTitle,
-                                subtitle: tab.url?.absoluteString ?? "", symbol: "square.on.square",
-                                favicon: tab.favicon, badge: "Switch to Tab") { browser.select(tab) },
-                    boost: q.isEmpty ? -5 : 0)
-            }
-        }
-        for b in browser.library.allBookmarks().prefix(200) {
-            guard let url = URL(string: b.urlString) else { continue }
-            add(PaletteItem(id: "bm-\(b.urlString)", kind: .bookmark, title: b.title, subtitle: b.urlString,
-                            symbol: "star.fill", favicon: FaviconLoader.shared.cached(host: url.host() ?? "")) {
-                browser.open(url: url, inNewTab: newTab)
-            })
-        }
-        for h in browser.library.searchHistory(q, limit: q.isEmpty ? 6 : 30) {
-            guard let url = URL(string: h.urlString) else { continue }
-            add(PaletteItem(id: "h-\(h.urlString)", kind: .history, title: h.title.isEmpty ? h.host : h.title,
-                            subtitle: h.urlString, symbol: "clock.arrow.circlepath",
-                            favicon: FaviconLoader.shared.cached(host: h.host)) {
-                browser.open(url: url, inNewTab: newTab)
-            }, boost: min(15, h.frecency / 50))
-        }
-        if !q.isEmpty {
-            for c in commands() { add(c) }
-        }
-
-        var ranked = PaletteSearch.rank(candidates, query: q, limit: 9).compactMap { items[$0] }
-        if case .search(let text)? = parsed {
-            let search = PaletteItem(id: "search", kind: .search, title: text, subtitle: "", symbol: "magnifyingglass",
-                                     badge: "Search \(engine.name)") {
-                browser.open(url: engine.searchURL(for: text), inNewTab: newTab)
-            }
-            // Strong matches (e.g. a host prefix) stay on top, otherwise searching is the default.
-            let topScore = ranked.first.flatMap { PaletteSearch.score(query: q, title: $0.title, subtitle: $0.subtitle) } ?? 0
-            ranked.insert(search, at: topScore >= 95 ? 1 : 0)
-        }
-        results = Array(ranked.prefix(9))
-    }
-
-    private func commands() -> [PaletteItem] {
-        var c: [PaletteItem] = [
-            PaletteItem(id: "cmd-space", kind: .command, title: "New Space", subtitle: "", symbol: "square.stack.3d.up.fill") {
-                browser.addSpace()
-            },
-            PaletteItem(id: "cmd-sidebar", kind: .command, title: "Toggle Sidebar", subtitle: "", symbol: "sidebar.left") {
-                withAnimation(Motion.snappy) { browser.sidebarVisible.toggle() }
-            },
-            PaletteItem(id: "cmd-reopen", kind: .command, title: "Reopen Closed Tab", subtitle: "", symbol: "arrow.uturn.backward") {
-                browser.reopenClosedTab()
-            },
-            PaletteItem(id: "cmd-settings", kind: .command, title: "Settings", subtitle: "", symbol: "gearshape") {
-                openSettings()
-            },
-            PaletteItem(id: "cmd-passwords", kind: .command, title: "Passwords", subtitle: "", symbol: "key.fill") {
-                UserDefaults.standard.set("passwords", forKey: "settingsTab"); openSettings()
-            },
-            PaletteItem(id: "cmd-clear", kind: .command, title: "Clear History", subtitle: "", symbol: "trash") {
-                browser.library.clearHistory(); browser.showToast("trash", "History cleared")
-            },
-        ]
-        if let tab = browser.selectedTab {
-            c.append(PaletteItem(id: "cmd-pin", kind: .command, title: tab.isPinned ? "Unpin Tab" : "Pin Tab",
-                                 subtitle: "", symbol: "pin.fill") { browser.togglePin(tab) })
-            c.append(PaletteItem(id: "cmd-blocker", kind: .command, title: "Toggle Tracker Blocking for This Site",
-                                 subtitle: "", symbol: "shield.lefthalf.filled") { browser.toggleBlockingForSelectedSite() })
-            c.append(PaletteItem(id: "cmd-copy", kind: .command, title: "Copy URL", subtitle: "", symbol: "link") {
-                if let u = tab.url {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(u.absoluteString, forType: .string)
-                    browser.showToast("link", "Link copied")
-                }
-            })
-        }
-        for (i, s) in browser.spaces.enumerated() where s.id != browser.selectedSpaceID {
-            c.append(PaletteItem(id: "cmd-go-\(s.id)", kind: .command, title: "Go to \(s.name)", subtitle: "",
-                                 symbol: s.symbol, badge: "⌃\(i + 1)") { browser.switchSpace(to: s) })
-        }
-        return c
+        results = PaletteResults.build(query: query, editingCurrent: browser.palette == .editCurrent,
+                                       browser: browser, openSettings: { openSettings() })
     }
 }
 
-private struct PaletteRow: View {
+struct PaletteRow: View {
     let item: PaletteItem
     let selected: Bool
     let ns: Namespace.ID
@@ -241,3 +146,106 @@ private struct PaletteRow: View {
         .contentShape(Rectangle())
     }
 }
+
+/// Builds and ranks suggestions; shared by the command palette and the home search bar.
+@MainActor
+enum PaletteResults {
+    static func build(query q: String, editingCurrent: Bool, browser: BrowserState,
+                      openSettings: @escaping () -> Void, limit: Int = 9) -> [PaletteItem] {
+        let newTab = !editingCurrent
+        var items: [String: PaletteItem] = [:]
+        var candidates: [PaletteSearch.Candidate<String>] = []
+        func add(_ item: PaletteItem, boost: Double = 0) {
+            items[item.id] = item
+            candidates.append(.init(id: item.id, kind: item.kind, title: item.title, subtitle: item.subtitle, extraBoost: boost))
+        }
+
+        let engine = Preferences.shared.searchEngine
+        let parsed = URLInputParser.parse(q)
+        if case .url(let url)? = parsed, !editingCurrent || q != browser.selectedTab?.url?.absoluteString {
+            add(PaletteItem(id: "nav", kind: .navigate, title: url.absoluteString, subtitle: "", symbol: "arrow.up.right.circle.fill",
+                            badge: "Open") { browser.open(url: url, inNewTab: newTab) })
+        }
+
+        for space in browser.spaces {
+            for tab in space.allTabs where tab !== browser.selectedTab || q.isEmpty == false {
+                add(PaletteItem(id: "tab-\(tab.id)", kind: .tab, title: tab.displayTitle,
+                                subtitle: tab.url?.absoluteString ?? "", symbol: "square.on.square",
+                                favicon: tab.favicon, badge: "Switch to Tab") { browser.select(tab) },
+                    boost: q.isEmpty ? -5 : 0)
+            }
+        }
+        for b in browser.library.allBookmarks().prefix(200) {
+            guard let url = URL(string: b.urlString) else { continue }
+            add(PaletteItem(id: "bm-\(b.urlString)", kind: .bookmark, title: b.title, subtitle: b.urlString,
+                            symbol: "star.fill", favicon: FaviconLoader.shared.cached(host: url.host() ?? "")) {
+                browser.open(url: url, inNewTab: newTab)
+            })
+        }
+        for h in browser.library.searchHistory(q, limit: q.isEmpty ? 6 : 30) {
+            guard let url = URL(string: h.urlString) else { continue }
+            add(PaletteItem(id: "h-\(h.urlString)", kind: .history, title: h.title.isEmpty ? h.host : h.title,
+                            subtitle: h.urlString, symbol: "clock.arrow.circlepath",
+                            favicon: FaviconLoader.shared.cached(host: h.host)) {
+                browser.open(url: url, inNewTab: newTab)
+            }, boost: min(15, h.frecency / 50))
+        }
+        if !q.isEmpty {
+            for c in commands(browser: browser, openSettings: openSettings) { add(c) }
+        }
+
+        var ranked = PaletteSearch.rank(candidates, query: q, limit: limit).compactMap { items[$0] }
+        if case .search(let text)? = parsed {
+            let search = PaletteItem(id: "search", kind: .search, title: text, subtitle: "", symbol: "magnifyingglass",
+                                     badge: "Search \(engine.name)") {
+                browser.open(url: engine.searchURL(for: text), inNewTab: newTab)
+            }
+            // Strong matches (e.g. a host prefix) stay on top, otherwise searching is the default.
+            let topScore = ranked.first.flatMap { PaletteSearch.score(query: q, title: $0.title, subtitle: $0.subtitle) } ?? 0
+            ranked.insert(search, at: topScore >= 95 ? 1 : 0)
+        }
+        return Array(ranked.prefix(limit))
+    }
+
+    private static func commands(browser: BrowserState, openSettings: @escaping () -> Void) -> [PaletteItem] {
+        var c: [PaletteItem] = [
+            PaletteItem(id: "cmd-space", kind: .command, title: "New Space", subtitle: "", symbol: "square.stack.3d.up.fill") {
+                browser.addSpace()
+            },
+            PaletteItem(id: "cmd-sidebar", kind: .command, title: "Toggle Sidebar", subtitle: "", symbol: "sidebar.left") {
+                withAnimation(Motion.snappy) { browser.sidebarVisible.toggle() }
+            },
+            PaletteItem(id: "cmd-reopen", kind: .command, title: "Reopen Closed Tab", subtitle: "", symbol: "arrow.uturn.backward") {
+                browser.reopenClosedTab()
+            },
+            PaletteItem(id: "cmd-settings", kind: .command, title: "Settings", subtitle: "", symbol: "gearshape") {
+                openSettings()
+            },
+            PaletteItem(id: "cmd-passwords", kind: .command, title: "Passwords", subtitle: "", symbol: "key.fill") {
+                UserDefaults.standard.set("passwords", forKey: "settingsTab"); openSettings()
+            },
+            PaletteItem(id: "cmd-clear", kind: .command, title: "Clear History", subtitle: "", symbol: "trash") {
+                browser.library.clearHistory(); browser.showToast("trash", "History cleared")
+            },
+        ]
+        if let tab = browser.selectedTab {
+            c.append(PaletteItem(id: "cmd-pin", kind: .command, title: tab.isPinned ? "Unpin Tab" : "Pin Tab",
+                                 subtitle: "", symbol: "pin.fill") { browser.togglePin(tab) })
+            c.append(PaletteItem(id: "cmd-blocker", kind: .command, title: "Toggle Tracker Blocking for This Site",
+                                 subtitle: "", symbol: "shield.lefthalf.filled") { browser.toggleBlockingForSelectedSite() })
+            c.append(PaletteItem(id: "cmd-copy", kind: .command, title: "Copy URL", subtitle: "", symbol: "link") {
+                if let u = tab.url {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(u.absoluteString, forType: .string)
+                    browser.showToast("link", "Link copied")
+                }
+            })
+        }
+        for (i, s) in browser.spaces.enumerated() where s.id != browser.selectedSpaceID {
+            c.append(PaletteItem(id: "cmd-go-\(s.id)", kind: .command, title: "Go to \(s.name)", subtitle: "",
+                                 symbol: s.symbol, badge: "⌃\(i + 1)") { browser.switchSpace(to: s) })
+        }
+        return c
+    }
+}
+
