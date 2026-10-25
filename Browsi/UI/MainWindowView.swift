@@ -238,7 +238,32 @@ private struct ContentCard: View {
         .transaction { $0.animation = nil }
         .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(.primary.opacity(edgeToEdge ? 0 : 0.08)))
-        .shadow(color: .black.opacity(edgeToEdge ? 0 : 0.14), radius: 14, y: 4)
+        .modifier(CardShadow(radius: radius, hidden: edgeToEdge, fromContent: tab?.isHome ?? true))
+    }
+}
+
+/// The content card's drop shadow. Web pages get it from an opaque rounded rectangle *behind* the card:
+/// a shadow on the card itself is derived from everything rendered inside it, so every change to the
+/// page's layers (e.g. YouTube fading its controls over a playing video) re-renders the shadow from the
+/// live video, which flickers. The translucent home card can't hide a filled shape, so it keeps the
+/// content shadow (no web view there).
+private struct CardShadow: ViewModifier {
+    let radius: CGFloat
+    let hidden: Bool
+    let fromContent: Bool
+
+    func body(content: Content) -> some View {
+        if hidden {
+            content
+        } else if fromContent {
+            content.shadow(color: .black.opacity(0.14), radius: 14, y: 4)
+        } else {
+            content.background {
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .fill(.background)
+                    .shadow(color: .black.opacity(0.14), radius: 14, y: 4)
+            }
+        }
     }
 }
 
