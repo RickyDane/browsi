@@ -9,8 +9,11 @@ final class LibraryStore {
     private var saveTask: Task<Void, Never>?
     /// Bumped on bookmark changes so views can refresh cheaply.
     private(set) var bookmarkRevision = 0
+    /// In-memory stores (tests) must never write to the user's files.
+    let isInMemory: Bool
 
     init(inMemory: Bool = false) {
+        isInMemory = inMemory
         let config = ModelConfiguration(isStoredInMemoryOnly: inMemory)
         do {
             container = try ModelContainer(for: HistoryEntry.self, Bookmark.self, configurations: config)

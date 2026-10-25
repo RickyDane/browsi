@@ -2,11 +2,12 @@ import SwiftUI
 import WebKit
 
 enum SettingsPane: String, CaseIterable, Identifiable {
-    case general, appearance, tabs, privacy, passwords, extensions, websites, downloads, advanced
+    case profile, general, appearance, tabs, privacy, passwords, extensions, websites, downloads, advanced
     var id: String { rawValue }
 
     var title: String {
         switch self {
+        case .profile: "Profile"
         case .general: "General"
         case .appearance: "Appearance"
         case .tabs: "Tabs & Spaces"
@@ -21,6 +22,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
 
     var symbol: String {
         switch self {
+        case .profile: "person.crop.circle.fill"
         case .general: "gearshape.fill"
         case .appearance: "paintbrush.fill"
         case .tabs: "square.stack.fill"
@@ -41,6 +43,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
 
     var color: Color {
         switch self {
+        case .profile: Color(red: 0.36, green: 0.3, blue: 0.92)
         case .general: .gray
         case .appearance: .indigo
         case .tabs: .purple
@@ -79,6 +82,7 @@ struct SettingsView: View {
         } detail: {
             Group {
                 switch SettingsPane(rawValue: selection) ?? .general {
+                case .profile: ProfilePane()
                 case .general: GeneralPane()
                 case .appearance: AppearancePane()
                 case .tabs: TabsPane()
@@ -101,6 +105,42 @@ struct SettingsView: View {
 private struct NewTabsNote: View {
     var body: some View {
         Text("Applies to newly opened and reloaded tabs.").font(.caption).foregroundStyle(.secondary)
+    }
+}
+
+// MARK: - Profile
+
+private struct ProfilePane: View {
+    @Environment(BrowserState.self) private var browser
+    @Bindable private var prefs = Preferences.shared
+    private let mac = MacInfo.current
+
+    private var displayName: String {
+        let custom = prefs.profileName.trimmingCharacters(in: .whitespaces)
+        return custom.isEmpty ? NSFullUserName() : custom
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                ProfileCard(name: displayName, handle: NSUserName(), mac: mac, hue: browser.selectedSpace.hue)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 26)
+                    .listRowBackground(Color.clear)
+            }
+            Section("Profile") {
+                TextField("Display name", text: $prefs.profileName, prompt: Text(NSFullUserName()))
+                LabeledContent("Account", value: NSUserName())
+            }
+            Section("This Mac") {
+                LabeledContent("Model", value: mac.modelName)
+                LabeledContent("Identifier", value: mac.modelIdentifier)
+                LabeledContent("Chip", value: mac.chip)
+                LabeledContent("Memory", value: mac.memory)
+                LabeledContent("System", value: mac.osVersion)
+                LabeledContent("Computer name", value: mac.hostName)
+            }
+        }
     }
 }
 
@@ -172,6 +212,9 @@ private struct AppearancePane: View {
                 .pickerStyle(.segmented)
                 .disabled(prefs.spaceTheme)
             }
+            Section("App Icon") {
+                AppIconPicker(selection: $prefs.appIcon)
+            }
             Section("Sidebar") {
                 LabeledContent("Width") {
                     HStack {
@@ -189,7 +232,11 @@ private struct AppearancePane: View {
             Section("Window") {
                 Toggle("Animated space background", isOn: $prefs.animatedBackground)
                 LabeledContent("Background intensity") {
-                    Slider(value: $prefs.backgroundIntensity, in: 0.2...1)
+                    HStack {
+                        Slider(value: $prefs.backgroundIntensity, in: 0...1)
+                        Text("\(Int((prefs.backgroundIntensity * 100).rounded())) %").monospacedDigit().foregroundStyle(.secondary)
+                            .frame(width: 50, alignment: .trailing)
+                    }
                 }
                 Toggle("Edge-to-edge web content", isOn: $prefs.edgeToEdgeContent)
             }
@@ -200,6 +247,37 @@ private struct AppearancePane: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
+    }
+}
+
+private struct AppIconPicker: View {
+    @Binding var selection: AppIconChoice
+
+    var body: some View {
+        HStack(spacing: 14) {
+            ForEach(AppIconChoice.allCases) { icon in
+                let selected = icon == selection
+                Button { withAnimation(Motion.snappy) { selection = icon } } label: {
+                    VStack(spacing: 6) {
+                        Group {
+                            if let image = icon.image { Image(nsImage: image).resizable() } else { Color.secondary }
+                        }
+                        .frame(width: 64, height: 64)
+                        .padding(3)
+                        .background(RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .strokeBorder(Color.accentColor, lineWidth: selected ? 2.5 : 0))
+                        Text(icon.name).font(.caption)
+                            .foregroundStyle(selected ? .primary : .secondary)
+                            .lineLimit(1).fixedSize()
+                    }
+                }
+                .buttonStyle(SquishButtonStyle(hoverBackground: false))
+                .accessibilityLabel(icon.name)
+                .accessibilityAddTraits(selected ? .isSelected : [])
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 4)
     }
 }
 

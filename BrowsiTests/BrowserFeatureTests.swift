@@ -9,6 +9,16 @@ struct BrowserFeatureTests {
         #expect(!UserAgent.safariVersion.isEmpty)
     }
 
+    /// Tests run inside the app's sandbox container; they must never overwrite the user's session (and its pinned tabs).
+    @Test func inMemoryBrowserDoesNotWriteSessionFile() {
+        let url = SessionStore.fileURL
+        let before = try? Data(contentsOf: url)
+        let browser = BrowserState(library: LibraryStore(inMemory: true), restore: false)
+        browser.togglePin(browser.newTab(url: URL(string: "about:blank#pin")))
+        browser.saveSessionNow()
+        #expect((try? Data(contentsOf: url)) == before)
+    }
+
     @Test func peekPromotesIntoTabNextToSource() {
         let browser = BrowserState(library: LibraryStore(inMemory: true), restore: false)
         let source = browser.newTab(url: URL(string: "about:blank"))

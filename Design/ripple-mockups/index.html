@@ -1,0 +1,598 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Browsi — passkey grid-wave mockups</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; background: #0b0b10; color: #e8e8f0; font: 14px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif; }
+  header { padding: 28px 36px 8px; display: flex; align-items: end; gap: 24px; flex-wrap: wrap; }
+  h1 { margin: 0; font-size: 22px; font-weight: 650; letter-spacing: -0.01em; }
+  header p { margin: 4px 0 0; color: #9a9ab0; max-width: 720px; }
+  .controls { margin-left: auto; display: flex; gap: 10px; align-items: center; }
+  button, select { background: #1c1c26; color: #e8e8f0; border: 1px solid #2c2c3a; border-radius: 8px; padding: 7px 12px; font: inherit; cursor: pointer; }
+  button:hover { background: #262634; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(700px, 1fr)); gap: 28px; padding: 20px 36px 48px; }
+  .card { background: #13131b; border: 1px solid #22222e; border-radius: 16px; padding: 14px; }
+  .card h2 { margin: 2px 4px 2px; font-size: 16px; font-weight: 600; }
+  .card p { margin: 0 4px 12px; color: #9a9ab0; font-size: 13px; }
+  .section { grid-column: 1 / -1; margin: 18px 4px 0; font-size: 18px; font-weight: 650; color: #cfcfe0; }
+  .stage { position: relative; container-type: inline-size; }
+  .dlg { position: absolute; left: 50%; top: 46%; width: 34cqw; transform: translate(-50%, -50%) scale(0.96); opacity: 0; pointer-events: none;
+         background: rgba(246,246,250,0.82); backdrop-filter: blur(24px) saturate(1.6); -webkit-backdrop-filter: blur(24px) saturate(1.6);
+         border: 1px solid rgba(255,255,255,0.6); border-radius: 2.2cqw; box-shadow: 0 2cqw 5cqw rgba(0,0,0,0.35);
+         color: #1d1d1f; text-align: center; padding: 2.4cqw 2.2cqw 1.8cqw; font-size: 1.45cqw; transition: opacity .35s ease, transform .35s ease; }
+  .dlg.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  .dlg b { display: block; font-size: 1.65cqw; margin: 1.2cqw 0 0.5cqw; }
+  .dlg .sub { color: #6e6e73; }
+  .dlg .fp { width: 6.5cqw; height: 6.5cqw; margin: 0 auto; color: #ff375f; animation: fp 1.6s ease-in-out infinite; }
+  .dlg.ok .fp { color: #30d158; animation: none; }
+  .dlg .btns { display: flex; gap: 0.8cqw; margin-top: 1.8cqw; }
+  .dlg .btns span { flex: 1; background: rgba(0,0,0,0.07); border-radius: 0.9cqw; padding: 0.6cqw 0; font-weight: 500; }
+  @keyframes fp { 50% { opacity: 0.55; } }
+  canvas { display: block; width: 100%; aspect-ratio: 16 / 10; border-radius: 12px; cursor: crosshair; background: #000; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Passkey ripple mockups</h1>
+    <p>Each preview replays automatically from the “Sign in with a passkey” button. Click anywhere inside a preview to start the wave from that point. Grid variants: the wave lays a fine, calm grid over the window while the Touch ID dialog is open; on success the grid dissolves outward.</p>
+  </div>
+  <div class="controls">
+    <label>Space colour
+      <select id="tint">
+        <option value="47,224,210">Teal (Nebula)</option>
+        <option value="140,120,255">Violet</option>
+        <option value="255,95,190">Pink</option>
+        <option value="80,150,255">Blue</option>
+      </select>
+    </label>
+    <button id="replay">Replay all</button>
+  </div>
+</header>
+<div class="grid" id="grid"></div>
+
+<script>
+const W = 800, H = 500;               // logical size of the mock window (CSS px)
+const DPR = Math.min(2, window.devicePixelRatio || 1);
+const BUTTON = { x: 405, y: 318, w: 250, h: 40 };   // passkey button inside the page card
+const ORIGIN = [BUTTON.x + BUTTON.w / 2, BUTTON.y + BUTTON.h / 2];
+
+// ---------- Mock Browsi window (drawn once, used as the texture) ----------
+function drawMock() {
+  const c = document.createElement('canvas');
+  c.width = W * DPR; c.height = H * DPR;
+  const g = c.getContext('2d'); g.scale(DPR, DPR);
+  const rr = (x, y, w, h, r) => { g.beginPath(); g.roundRect(x, y, w, h, r); };
+  // window background / sidebar (space theme)
+  const bg = g.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, '#120c2e'); bg.addColorStop(1, '#06040f');
+  g.fillStyle = bg; g.fillRect(0, 0, W, H);
+  let s = 7; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 140; i++) { g.globalAlpha = 0.2 + rnd() * 0.7; g.fillStyle = '#fff'; g.beginPath(); g.arc(rnd() * W, rnd() * H, rnd() * 1.2 + 0.3, 0, 7); g.fill(); }
+  g.globalAlpha = 1;
+  // traffic lights
+  [['#ff5f57', 18], ['#febc2e', 38], ['#28c840', 58]].forEach(([col, x]) => { g.fillStyle = col; g.beginPath(); g.arc(x, 20, 6, 0, 7); g.fill(); });
+  // url field
+  g.fillStyle = 'rgba(255,255,255,0.08)'; rr(12, 40, 186, 30, 9); g.fill();
+  g.fillStyle = 'rgba(255,255,255,0.75)'; g.font = '12px -apple-system, sans-serif'; g.fillText('accounts.example.com', 24, 59);
+  // pinned home + tabs
+  const tabs = [['Home', '#8c78ff'], ['Sign in – Example', '#2fe0d2', true], ['YouTube', '#ff4040'], ['GitHub', '#c9d1d9'], ['Hacker News', '#ff7a00'], ['Apple Developer', '#9aa0a6']];
+  tabs.forEach(([t, col, sel], i) => {
+    const y = 88 + i * 36;
+    if (sel) { g.fillStyle = 'rgba(255,255,255,0.14)'; rr(10, y - 4, 190, 30, 8); g.fill(); }
+    g.fillStyle = col; rr(22, y + 4, 14, 14, 4); g.fill();
+    g.fillStyle = sel ? '#fff' : 'rgba(255,255,255,0.72)'; g.font = '13px -apple-system, sans-serif'; g.fillText(t, 46, y + 16);
+  });
+  // page card
+  g.save(); g.shadowColor = 'rgba(0,0,0,0.5)'; g.shadowBlur = 18; g.fillStyle = '#fafafc'; rr(212, 10, 578, 480, 12); g.fill(); g.restore();
+  g.save(); rr(212, 10, 578, 480, 12); g.clip();
+  g.fillStyle = '#fff'; g.fillRect(212, 10, 578, 46);
+  g.fillStyle = '#e8e8ee'; g.fillRect(212, 56, 578, 1);
+  g.fillStyle = '#111'; g.font = '600 15px -apple-system, sans-serif'; g.fillText('◆ Example', 232, 38);
+  ['Products', 'Pricing', 'Docs'].forEach((t, i) => { g.fillStyle = '#666'; g.font = '13px -apple-system, sans-serif'; g.fillText(t, 560 + i * 72, 38); });
+  g.fillStyle = '#111'; g.font = '700 26px -apple-system, sans-serif'; g.textAlign = 'center'; g.fillText('Welcome back', 530, 140);
+  g.fillStyle = '#777'; g.font = '14px -apple-system, sans-serif'; g.fillText('Sign in to continue to your workspace', 530, 166);
+  g.textAlign = 'left';
+  g.fillStyle = '#fff'; g.strokeStyle = '#d6d6de'; rr(405, 196, 250, 38, 9); g.fill(); g.stroke();
+  g.fillStyle = '#9b9ba6'; g.font = '14px -apple-system, sans-serif'; g.fillText('name@example.com', 419, 220);
+  g.fillStyle = '#e9e9f0'; rr(405, 246, 250, 38, 9); g.fill();
+  g.fillStyle = '#333'; g.font = '600 14px -apple-system, sans-serif'; g.textAlign = 'center'; g.fillText('Continue', 530, 270);
+  g.fillStyle = '#aaa'; g.font = '12px -apple-system, sans-serif'; g.fillText('or', 530, 304);
+  g.fillStyle = '#111'; rr(BUTTON.x, BUTTON.y, BUTTON.w, BUTTON.h, 10); g.fill();
+  g.fillStyle = '#fff'; g.font = '600 14px -apple-system, sans-serif'; g.fillText('🔑  Sign in with a passkey', 530, BUTTON.y + 25);
+  g.textAlign = 'left';
+  g.fillStyle = '#ececf2';
+  for (let i = 0; i < 4; i++) { rr(250, 400 + i * 18, 500 - (i % 2) * 120, 8, 4); g.fill(); }
+  g.restore();
+  return c;
+}
+const MOCK = drawMock();
+
+// ---------- Shaders ----------
+const VERT = `attribute vec2 a; varying vec2 v_uv;
+void main(){ v_uv = vec2(a.x*0.5+0.5, 0.5-a.y*0.5); gl_Position = vec4(a,0.,1.); }`;
+
+const COMMON = `precision highp float;
+uniform sampler2D u_tex; uniform vec2 u_res; uniform vec2 u_o; uniform float u_t; uniform vec3 u_tint;
+varying vec2 v_uv;
+uniform float u_speed; uniform float u_end;
+#define SPEED u_speed
+const float WL = 170.0;      // distance between successive waves
+const float PI = 3.14159265;
+float env(){ return (1.0 - smoothstep(u_end - 1.2, u_end, u_t)) * smoothstep(0.0, 0.3, u_t); }
+// Brightness of the expanding rings at radius r: a leading ring + softer echoes behind it.
+float rings(float r, float width){
+  float f = u_t * SPEED, a = 0.0, w = 1.0;
+  for (int k = 0; k < 4; k++) {
+    float fk = f - float(k) * WL;
+    if (fk > 0.0) a += w * exp(-pow((r - fk) / width, 2.0));
+    w *= 0.55;
+  }
+  return a;
+}
+// Single wave: one ring, no echoes.
+uniform float u_rel;   // time the system auth dialog finishes (grid dissolves from then)
+float ring1(float r, float width){
+  float x = (r - u_t * SPEED) / (width * 1.4);
+  float a = exp(-x * x) * 0.85;
+  if (u_t > u_rel) { float y = (r - (u_t - u_rel) * SPEED * 1.4) / (width * 1.4); a += exp(-y * y) * 0.55; }
+  return a;
+}
+// Signed slow wave behind the front (for displacement / shading).
+float wave(float r){
+  float b = u_t * SPEED - r;
+  if (b < 0.0) return 0.0;
+  return sin(b / WL * 2.0 * PI) * exp(-b / (WL * 2.6)) * smoothstep(0.0, 50.0, b) / (1.0 + r / 900.0);
+}
+float gridLine(vec2 p, float cell, float px){
+  vec2 f = abs(fract(p / cell - 0.5) - 0.5) * cell;
+  return 1.0 - smoothstep(0.0, px, min(f.x, f.y));
+}
+vec3 tex(vec2 p){ return texture2D(u_tex, clamp(p / u_res, 0.0, 1.0)).rgb; }
+vec3 screenB(vec3 a, vec3 b){ return 1.0 - (1.0 - a) * (1.0 - b); }
+// Tint glow that reads on both dark (screen) and light (tinted ink) surfaces.
+vec3 glow(vec3 c, float a){
+  a = clamp(a, 0.0, 1.0);
+  float lum = dot(c, vec3(0.299, 0.587, 0.114));
+  vec3 onDark = screenB(c, u_tint * a);
+  vec3 onLight = mix(c, u_tint * 0.78, a * 0.7);
+  return mix(onDark, onLight, smoothstep(0.35, 0.85, lum));
+}
+vec3 glowC(vec3 c, vec3 tint, float a){
+  a = clamp(a, 0.0, 1.0);
+  float lum = dot(c, vec3(0.299, 0.587, 0.114));
+  return mix(screenB(c, tint * a), mix(c, tint * 0.78, a * 0.7), smoothstep(0.35, 0.85, lum));
+}
+float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+vec2 hash2(vec2 p){ return vec2(hash(p), hash(p + 17.3)); }
+float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y); }
+float fbm(vec2 p){ float a = 0.0, w = 0.5; for (int i = 0; i < 4; i++) { a += w * vnoise(p); p *= 2.03; w *= 0.5; } return a; }
+
+vec3 pix(vec2 p, float s){ return tex(p); }   // pixelation removed: content stays sharp, only the grid shows
+float bayer2(vec2 a){ a = floor(a); return fract(dot(a, vec2(0.5, a.y * 0.75))); }
+float bayer4(vec2 a){ return bayer2(0.5 * a) * 0.25 + bayer2(a); }
+vec3 hueShift(vec3 c){ return vec3(c.b, c.r, c.g) * 0.6 + vec3(0.55, 0.25, 0.95) * 0.4; }
+// 0..1: how much of the calm holding grid covers radius r (laid down by the wave, removed by the release wave).
+float holdCover(float r){
+  float on = smoothstep(0.0, 160.0, u_t * SPEED - r);
+  float off = u_t > u_rel ? smoothstep(0.0, 160.0, (u_t - u_rel) * SPEED * 1.4 - r) : 0.0;
+  return on * (1.0 - off);
+}
+// The small, calm pixel grid that stays while the Touch ID dialog is open.
+vec3 holdGrid(vec3 col, vec2 p){
+  float h = holdCover(length(p - u_o));
+  if (h <= 0.001) return col;
+  float s = 5.0;
+  vec2 id = floor(p / s);
+  col = mix(col, pix(p, s), h * 0.9);
+  vec2 f = abs(fract(p / s) - 0.5) * s;
+  float edge = 1.0 - smoothstep(0.0, 0.9, s * 0.5 - max(f.x, f.y));
+  float breathe = 0.5 + 0.5 * sin(u_t * 1.3 + hash(floor(p / 20.0)) * 6.2831);
+  col = glowC(col, u_tint, h * (edge * 0.16 + 0.02 + 0.03 * breathe));
+  return col;
+}
+
+`;
+
+const VARIANTS = [
+  {
+    name: '1 · Grid Swell',
+    desc: 'A square grid appears only inside the travelling wave band and bends with it; the window content swells gently under the crests. The closest to the current ripple, with a structure added.',
+    frag: `void main(){
+      vec2 p = v_uv * u_res; vec2 d = p - u_o; float r = length(d); vec2 n = r > 0.0 ? d / r : vec2(0.0);
+      float w = wave(r) * env();
+      vec2 q = p - n * w * 5.0;
+      vec3 col = tex(q);
+      float vis = rings(r, 70.0) * env();
+      float line = gridLine(q, 30.0, 1.1);
+      col = glow(col, line * vis * 0.75);
+      col = glow(col, vis * 0.06);
+      col += 0.04 * max(w, 0.0);
+      gl_FragColor = vec4(col, 1.0);
+    }`
+  },
+  {
+    name: '2 · Dot Lattice',
+    desc: 'A dot matrix covers the window; dots grow and light up as each wave passes through them, then shrink back. Reads as “scanning”, fitting for passkey lookup.',
+    frag: `void main(){
+      vec2 p = v_uv * u_res;
+      float cell = 20.0;
+      vec2 c = (floor(p / cell) + 0.5) * cell;
+      float rc = length(c - u_o);
+      float a = rings(rc, 55.0) * env();
+      float rad = 0.6 + 3.6 * a;
+      float dd = length(p - c);
+      float dot_ = 1.0 - smoothstep(rad - 0.8, rad + 0.8, dd);
+      vec3 col = tex(p);
+      col = glow(col, dot_ * clamp(0.15 + a, 0.0, 1.0) * env());
+      col = glow(col, a * 0.05);
+      gl_FragColor = vec4(col, 1.0);
+    }`
+  },
+  {
+    name: '3 · Hex Pulse',
+    desc: 'A honeycomb lattice ripples outward cell by cell: edges glow and cells fill faintly as the wave reaches them. More “secure / crypto” in character.',
+    frag: `vec4 hexC(vec2 uv){ vec2 R = vec2(1.0, 1.7320508); vec2 h = R * 0.5;
+      vec2 a = mod(uv, R) - h; vec2 b = mod(uv - h, R) - h;
+      vec2 gv = dot(a, a) < dot(b, b) ? a : b; return vec4(gv, uv - gv); }
+    float hexD(vec2 p){ p = abs(p); return max(dot(p, normalize(vec2(1.0, 1.7320508))), p.x); }
+    void main(){
+      vec2 p = v_uv * u_res; float S = 26.0;
+      vec4 h = hexC(p / S);
+      vec2 center = h.zw * S;
+      float a = rings(length(center - u_o), 60.0) * env();
+      float edge = 0.5 - hexD(h.xy);
+      float line = 1.0 - smoothstep(0.0, 0.045, edge);
+      vec3 col = tex(p);
+      col = glow(col, (line * (0.12 + a) * 0.85 + a * 0.10) * env());
+      gl_FragColor = vec4(col, 1.0);
+    }`
+  },
+  {
+    name: '4 · Tile Lift',
+    desc: 'The whole window splits into tiles that briefly shrink apart as the wave passes, revealing a glowing grid in the seams, then settle back seamlessly.',
+    frag: `void main(){
+      vec2 p = v_uv * u_res; float cell = 36.0;
+      vec2 c = (floor(p / cell) + 0.5) * cell;
+      float a = clamp(rings(length(c - u_o), 70.0), 0.0, 1.2) * env();
+      float s = 1.0 - 0.085 * a;
+      vec2 l = (p - c) / s;
+      vec3 col;
+      float half_ = cell * 0.5;
+      float inside = step(max(abs(l.x), abs(l.y)), half_ - 0.01);
+      vec3 tile = tex(c + l) * (1.0 + 0.10 * a);
+      vec3 seam = mix(tex(p) * 0.35, u_tint, 0.75) * clamp(a * 1.3, 0.0, 1.0) + tex(p) * (1.0 - clamp(a * 1.3, 0.0, 1.0));
+      // soft edge between tile and seam
+      float e = smoothstep(half_ - 1.2, half_, max(abs(l.x), abs(l.y)));
+      col = mix(tile, seam, e);
+      gl_FragColor = vec4(col, 1.0);
+    }`
+  },
+  {
+    name: '5 · Warp Mesh',
+    desc: 'A fine wireframe mesh fades in and rolls like fabric with slow waves; the content refracts underneath and lines catch light on the crests. The most “physical” option.',
+    frag: `void main(){
+      vec2 p = v_uv * u_res; vec2 d = p - u_o; float r = length(d); vec2 n = r > 0.0 ? d / r : vec2(0.0);
+      float e = env();
+      float w = wave(r) * e;
+      float w2 = wave(r + 2.0) * e;
+      float slope = (w - w2) * 0.5;            // derivative along radius
+      vec2 q = p - n * w * 7.0;
+      vec3 col = tex(q);
+      float b = u_t * SPEED - r;
+      float cover = smoothstep(-40.0, 30.0, b) * exp(-max(b, 0.0) / (WL * 4.0)) * e;
+      float line = gridLine(q, 24.0, 1.0);
+      float light = clamp(0.35 + 0.65 * max(w, 0.0) + 6.0 * max(slope, 0.0), 0.0, 1.0);
+      col = glow(col, line * cover * light * 0.8);
+      col = screenB(col, vec3(0.06) * max(w, 0.0) * cover);
+      gl_FragColor = vec4(col, 1.0);
+    }`
+  },
+  {
+    section: 'New directions · completely different styles',
+    name: '6 · Aurora Curtain',
+    desc: 'No geometry at all: soft aurora ribbons in two space hues drift outward from the button with ragged, curtain-like edges and fine vertical streaks, then dissolve.',
+    frag: `void main(){
+      vec2 p = v_uv * u_res; vec2 d = p - u_o; float r = length(d); float th = atan(d.y, d.x);
+      float e = env();
+      float warp = 70.0 * (fbm(vec2(th * 2.2, u_t * 0.35)) - 0.5);
+      float a = rings(r + warp, 85.0 + 50.0 * fbm(vec2(th * 4.0, 3.0)));
+      float streak = 0.55 + 0.45 * vnoise(vec2(th * 60.0, r * 0.004 - u_t * 0.3));
+      float mixk = fbm(vec2(th * 1.5, r * 0.004 + u_t * 0.2));
+      vec3 c2 = mix(u_tint, hueShift(u_tint), smoothstep(0.35, 0.65, mixk));
+      vec3 col = tex(p);
+      col = glowC(col, c2, a * streak * 0.55 * e);
+      gl_FragColor = vec4(col, 1.0);
+    }`
+  },
+  {
+    name: '7 · Liquid Glass Lens',
+    desc: 'A ring of Liquid Glass expands across the window, magnifying and refracting what is under it, with a chromatic edge and a specular rim. A softer echo follows. Very macOS 26.',
+    frag: `vec3 lens(vec2 p, float R, float k, out float rim){
+      vec2 d = p - u_o; float r = length(d); vec2 n = r > 0.0 ? d / r : vec2(0.0);
+      float x = (r - R) / 70.0; rim = 0.0;
+      if (abs(x) >= 1.0 || R <= 0.0) return vec3(-1.0);
+      float h = sqrt(1.0 - x * x);
+      vec2 off = n * (-x) * h * 22.0 * k;
+      vec3 c = vec3(tex(p + off * 1.08).r, tex(p + off).g, tex(p + off * 0.92).b);
+      float spec = pow(max(dot(n, normalize(vec2(-0.6, -0.8))), 0.0), 3.0);
+      rim = (smoothstep(0.75, 0.98, abs(x)) * 0.55 + spec * h * 0.35) * k;
+      return c;
+    }
+    void main(){
+      vec2 p = v_uv * u_res; float e = env();
+      float R = u_t * SPEED;
+      vec3 col = tex(p); float rim;
+      vec3 c1 = lens(p, R, e, rim);
+      if (c1.r >= 0.0) { col = c1; col = screenB(col, vec3(rim)); col = glowC(col, u_tint, rim * 0.5); }
+      else {
+        vec3 c2 = lens(p, R - WL * 1.4, e * 0.5, rim);
+        if (c2.r >= 0.0) { col = c2; col = screenB(col, vec3(rim)); col = glowC(col, u_tint, rim * 0.5); }
+      }
+      gl_FragColor = vec4(col, 1.0);
+    }`
+  },
+  {
+    name: '8 · Pixel Resolve',
+    tag: 'pixel', setSection: 'Original',
+    desc: 'The wave front briefly turns the window into chunky pixels that resolve back to full sharpness behind it, like a digital “decrypt” passing through the UI.',
+    frag: `void main(){
+      vec2 p = v_uv * u_res; float r = length(p - u_o);
+      float a = clamp(ring1(r, 75.0), 0.0, 1.0) * env();
+      float level = floor(a * 3.0 + 0.1);
+      vec3 col = tex(p);
+      if (level >= 1.0) {
+        float s = exp2(level + 1.0);
+        vec2 b = (floor(p / s) + 0.5) * s;
+        vec2 f = abs(fract(p / s) - 0.5) * s;
+        float edge = 1.0 - smoothstep(0.0, 1.0, s * 0.5 - max(f.x, f.y));
+        col = glowC(col, u_tint, edge * a * 0.25 + a * 0.06);
+      }
+      col = holdGrid(col, p);
+      gl_FragColor = vec4(col, 1.0);
+    }`
+  },
+  {
+    name: '9 · Constellation',
+    desc: 'Hidden stars across the whole window twinkle on as the wave reaches them, as four-point sparkles (the Browsi logo motif), then fade like a night sky going quiet.',
+    frag: `void main(){
+      vec2 p = v_uv * u_res; float e = env();
+      float cell = 34.0;
+      vec2 id = floor(p / cell);
+      vec2 star = (id + 0.2 + 0.6 * hash2(id)) * cell;
+      float rs = length(star - u_o);
+      float tw = 0.6 + 0.4 * sin(u_t * 6.0 + hash(id) * 30.0);
+      float a = rings(rs, 55.0) * e * tw * step(0.35, hash(id + 5.0));
+      vec2 q = p - star;
+      float size = 0.6 + 1.6 * hash(id + 9.0);
+      float core = exp(-dot(q, q) / (2.0 * size * size));
+      float rays = exp(-abs(q.x) / 0.7) * exp(-abs(q.y) / (7.0 * size)) + exp(-abs(q.y) / 0.7) * exp(-abs(q.x) / (7.0 * size));
+      float r = length(p - u_o);
+      vec3 col = tex(p);
+      col = glowC(col, u_tint, rings(r, 120.0) * e * 0.08);
+      col = glowC(col, mix(u_tint, vec3(1.0), 0.45), (core + rays * 0.8) * a);
+      gl_FragColor = vec4(col, 1.0);
+    }`
+  },
+  {
+    name: '10 · Topographic Contours',
+    desc: 'Organic contour lines, like a terrain map, roll outward from the button; every fourth line is stronger. Calm and editorial rather than techy.',
+    frag: `void main(){
+      vec2 p = v_uv * u_res; vec2 d = p - u_o; float r = length(d); float e = env();
+      float f = r + 55.0 * (fbm(p * 0.0045 + vec2(0.0, u_t * 0.06)) - 0.5);
+      float b = u_t * SPEED - f;
+      float cover = smoothstep(-30.0, 10.0, b) * exp(-max(b, 0.0) / (WL * 2.2)) * e;
+      float sp = 22.0;
+      float dist = abs(fract(f / sp - 0.5) - 0.5) * sp;
+      float idx = floor(f / sp + 0.5);
+      float major = step(0.5, 1.0 - step(0.01, mod(idx, 4.0)));
+      float line = 1.0 - smoothstep(0.0, 0.9 + major * 0.7, dist);
+      float front = exp(-pow(b / 40.0, 2.0)) * e;
+      vec3 col = tex(p);
+      col = glowC(col, u_tint, line * (cover * (0.35 + 0.45 * major) + front * 0.5));
+      gl_FragColor = vec4(col, 1.0);
+    }`
+  },
+  {
+    name: '11 · Fingerprint',
+    desc: 'Touch ID ridges grow outward from the button: a whorl of broken, curving lines that resolves into a fingerprint pattern and then fades. Says “authentication” directly.',
+    frag: `void main(){
+      vec2 p = v_uv * u_res; vec2 d = p - u_o; float r = length(d); float th = atan(d.y, d.x); float e = env();
+      float f = r * (1.0 + 0.12 * sin(th * 2.0 + 0.7)) + 14.0 * sin(th * 3.0 + r * 0.012) + 30.0 * (fbm(d * 0.008) - 0.5);
+      float ridge = 0.5 + 0.5 * sin(f / 9.0 * 6.2831853);
+      float lines = smoothstep(0.82, 0.97, ridge) * step(0.22, vnoise(vec2(th * 18.0, f * 0.035)));
+      float b = u_t * SPEED * 0.85 - r;
+      float cover = smoothstep(-25.0, 15.0, b) * exp(-max(b, 0.0) / (WL * 2.0)) * (1.0 / (1.0 + r / 500.0)) * e;
+      float front = exp(-pow(b / 35.0, 2.0)) * e;
+      vec3 col = tex(p);
+      col = glowC(col, u_tint, lines * (cover * 0.7 + front * 0.4) + front * 0.05);
+      gl_FragColor = vec4(col, 1.0);
+    }`
+  },
+  {
+    tag: 'pixel', section: 'Pixel Resolve · 5 revisions',
+    name: 'P1 · Soft Resolve',
+    desc: 'The calmest one. Block size grows and shrinks smoothly (1 → 16 px) with cross-fades between levels instead of hard jumps; a faint tinted pixel grid shows only at the coarsest point.',
+    frag: `void main(){
+      vec2 p = v_uv * u_res; float r = length(p - u_o);
+      float a = clamp(ring1(r, 95.0), 0.0, 1.0) * env();
+      float lv = a * 2.8; float l0 = floor(lv); float fr = smoothstep(0.0, 1.0, fract(lv));
+      vec3 col = mix(pix(p, exp2(l0)), pix(p, exp2(l0 + 1.0)), fr);
+      float s = exp2(floor(lv + 0.5));
+      vec2 f = abs(fract(p / s) - 0.5) * s;
+      float edge = s > 3.0 ? 1.0 - smoothstep(0.0, 1.0, s * 0.5 - max(f.x, f.y)) : 0.0;
+      col = glowC(col, u_tint, edge * a * 0.18 + a * 0.04);
+      col = holdGrid(col, p);
+      gl_FragColor = vec4(col, 1.0);
+    }`
+  },
+  {
+    tag: 'pixel',
+    name: 'P2 · Scatter Resolve',
+    desc: 'Each block switches on its own slightly randomised schedule, so the wave front is a scattered, dissolving edge rather than a clean circle. Blocks flash the space colour as they lock back into place.',
+    frag: `void main(){
+      vec2 p = v_uv * u_res;
+      vec2 id = floor(p / 16.0); vec2 c = (id + 0.5) * 16.0;
+      float j = (hash(id) - 0.5) * 80.0;
+      float a = clamp(ring1(length(c - u_o) + j, 60.0), 0.0, 1.0) * env();
+      float level = floor(a * 2.6 + 0.15);
+      vec3 col = tex(p);
+      if (level >= 1.0) {
+        float s = exp2(level + 1.0);
+        col = pix(p, s);
+        vec2 f = abs(fract(p / s) - 0.5) * s;
+        float edge = 1.0 - smoothstep(0.0, 1.0, s * 0.5 - max(f.x, f.y));
+        col = glowC(col, u_tint, edge * a * 0.2);
+      }
+      float lock = smoothstep(0.25, 0.45, a) * (1.0 - smoothstep(0.45, 0.7, a));
+      col = glowC(col, u_tint, lock * 0.12 * step(0.5, hash(id + 3.0)));
+      col = holdGrid(col, p);
+      gl_FragColor = vec4(col, 1.0);
+    }`
+  },
+  {
+    tag: 'pixel',
+    name: 'P3 · Dither Decrypt',
+    desc: 'Inside the band the window drops to a two-tone, ordered-dither image in the space colour, like a retro 1-bit screen, then resolves back to full colour behind the wave.',
+    frag: `void main(){
+      vec2 p = v_uv * u_res; float r = length(p - u_o);
+      float a = clamp(ring1(r, 85.0), 0.0, 1.0) * env();
+      float s = 3.0;
+      vec2 id = floor(p / s);
+      vec3 src = pix(p, s);
+      float L = dot(src, vec3(0.299, 0.587, 0.114));
+      float bit = step(bayer4(id), L);
+      vec3 dark = u_tint * 0.12 + 0.02, light = mix(u_tint, vec3(1.0), 0.65);
+      vec3 dith = mix(dark, light, bit);
+      float m = smoothstep(0.15, 0.7, a) * 0.8;
+      vec3 col = mix(tex(p), dith, m);
+      col = holdGrid(col, p);
+      gl_FragColor = vec4(col, 1.0);
+    }`
+  },
+  {
+    tag: 'pixel',
+    name: 'P4 · Cipher Blocks',
+    desc: 'Pixelated blocks inside the wave carry tiny, flickering 3×3 cipher dot patterns, as if the window were being decrypted block by block. The flicker slows down as each block resolves.',
+    frag: `void main(){
+      vec2 p = v_uv * u_res; float s = 12.0;
+      vec2 id = floor(p / s); vec2 c = (id + 0.5) * s;
+      float a = clamp(ring1(length(c - u_o), 75.0), 0.0, 1.0) * env();
+      float m = smoothstep(0.15, 0.6, a);
+      vec3 pc = pix(p, s); float pl = dot(pc, vec3(0.299, 0.587, 0.114));
+      vec3 base = mix(tex(p), pc * mix(0.55, 0.95, pl), m);
+      vec2 lp = fract(p / s) * 3.0; vec2 sub = floor(lp);
+      float tick = floor(u_t * (1.5 + 3.0 * a) + hash(id) * 10.0);
+      float bit = step(0.45, hash(id * 1.31 + sub * 7.17 + tick));
+      float dotm = 1.0 - smoothstep(0.26, 0.36, length(fract(lp) - 0.5));
+      vec3 col = glowC(base, mix(u_tint, vec3(1.0), 0.2), bit * dotm * m * 0.6 + m * 0.03);
+      col = holdGrid(col, p);
+      gl_FragColor = vec4(col, 1.0);
+    }`
+  },
+  {
+    tag: 'pixel',
+    name: 'P5 · Quadtree Load',
+    desc: 'Like a progressive image loading in reverse: mixed block sizes (32/16/8/4 px) outlined in the space colour, plus a subtle RGB split right at the wave front. Feels the most “engineered”.',
+    frag: `void main(){
+      vec2 p = v_uv * u_res; vec2 d = p - u_o; float r = length(d); vec2 n = r > 0.0 ? d / r : vec2(0.0);
+      vec2 id = floor(p / 32.0); vec2 c = (id + 0.5) * 32.0;
+      float a = clamp(ring1(length(c - u_o), 80.0), 0.0, 1.0) * env();
+      float level = clamp(floor(a * 3.4 + (hash(id) - 0.5) * 1.2), 0.0, 4.0);
+      vec3 col = tex(p);
+      if (level >= 1.0) {
+        float s = exp2(level + 1.0);
+        float sp = clamp(ring1(r, 40.0), 0.0, 1.0) * env() * 1.2;
+        vec2 b = (floor(p / s) + 0.5) * s;
+        col = vec3(tex(p + n * sp).r, tex(p).g, tex(p - n * sp).b);
+        vec2 f = abs(fract(p / s) - 0.5) * s;
+        float edge = 1.0 - smoothstep(0.0, 1.0, s * 0.5 - max(f.x, f.y));
+        col = glowC(col, u_tint, edge * a * 0.3 + a * 0.03);
+      }
+      col = holdGrid(col, p);
+      gl_FragColor = vec4(col, 1.0);
+    }`
+  },
+];
+
+// ---------- Rendering ----------
+let tint = [47 / 255, 224 / 255, 210 / 255];
+const views = [];
+
+function makeView(v, idx) {
+  const sec = (SET && v.setSection) || v.section;
+  if (sec) { const h = document.createElement('h3'); h.className = 'section'; h.textContent = sec; document.getElementById('grid').appendChild(h); }
+  const card = document.createElement('div'); card.className = 'card';
+  card.innerHTML = `<h2>${v.name}</h2><p>${v.desc}</p>`;
+  const canvas = document.createElement('canvas');
+  canvas.width = W * DPR; canvas.height = H * DPR;
+  const stage = document.createElement('div'); stage.className = 'stage'; stage.appendChild(canvas); card.appendChild(stage);
+  document.getElementById('grid').appendChild(card);
+  let dlg = null;
+  if (v.tag === 'pixel') {
+    dlg = document.createElement('div'); dlg.className = 'dlg';
+    dlg.innerHTML = `<svg class="fp" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+      <path class="fpp" d="M14 40c3-4 4-9 4-15a6 6 0 0 1 12 0c0 4-.4 8-1.6 11.6M24 25c0 7-1.6 12.6-5 17M36 34c.6-3 1-6 1-9a13 13 0 0 0-23.6-7.6M10.4 23c-.3 1-.4 2-.4 3 0 3-.6 6-1.8 8.6M30 41.6c.8-1.6 1.4-3.4 1.8-5.2"/>
+      <path class="chk" d="M14 25l7 7 13-14" style="display:none"/></svg>
+      <b>Sign in to accounts.example.com</b><div class="sub">Browsi wants to use your passkey.<br>Touch ID to continue.</div>
+      <div class="btns"><span>Cancel</span><span>Use Password…</span></div>`;
+    stage.appendChild(dlg);
+  }
+  const gl = canvas.getContext('webgl', { antialias: false, premultipliedAlpha: false });
+  const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) { console.error(v.name, gl.getShaderInfoLog(s)); card.querySelector('p').textContent = 'Shader error: ' + gl.getShaderInfoLog(s); } return s; };
+  const prog = gl.createProgram();
+  gl.attachShader(prog, sh(gl.VERTEX_SHADER, VERT)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, COMMON + v.frag));
+  gl.linkProgram(prog); gl.useProgram(prog);
+  const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+  const loc = gl.getAttribLocation(prog, 'a'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+  const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, MOCK);
+  const U = n => gl.getUniformLocation(prog, n);
+  const calm = v.tag === 'pixel';
+  const view = { gl, dlg, loop: calm ? 6.2 : 4.6, u: { res: U('u_res'), o: U('u_o'), t: U('u_t'), tint: U('u_tint') }, origin: ORIGIN.slice(), start: performance.now() + idx * 250 };
+  gl.uniform1f(U('u_speed'), calm ? 290 : 300); gl.uniform1f(U('u_end'), calm ? 5.6 : 3.5); gl.uniform1f(U('u_rel'), calm ? 3.0 : 99.0);
+  gl.uniform2f(view.u.res, W, H); gl.uniform1i(U('u_tex'), 0);
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  canvas.addEventListener('click', e => {
+    const b = canvas.getBoundingClientRect();
+    view.origin = [(e.clientX - b.left) / b.width * W, (e.clientY - b.top) / b.height * H];
+    view.start = performance.now();
+  });
+  views.push(view);
+}
+
+const SET = new URLSearchParams(location.search).get('set');
+VARIANTS.filter(v => !SET || v.tag === SET).forEach(makeView);
+
+const LOOP = 4.6;
+function frame(now) {
+  for (const v of views) {
+    let t = (now - v.start) / 1000;
+    if (t > v.loop) { v.start = now; v.origin = ORIGIN.slice(); t = 0; }
+    const gl = v.gl;
+    if (v.dlg) {   // mock system Touch ID dialog: opens with the wave, succeeds, then releases the grid at t = 4.4 s
+      const show = t > 0.45 && t < 3.0, ok = t > 2.4;
+      v.dlg.classList.toggle('show', show); v.dlg.classList.toggle('ok', ok);
+      v.dlg.querySelector('.fpp').style.display = ok ? 'none' : ''; v.dlg.querySelector('.chk').style.display = ok ? '' : 'none';
+    }
+    gl.uniform1f(v.u.t, Math.max(0, t));
+    gl.uniform2f(v.u.o, v.origin[0], v.origin[1]);
+    gl.uniform3f(v.u.tint, tint[0], tint[1], tint[2]);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+document.getElementById('replay').onclick = () => { const n = performance.now(); views.forEach(v => { v.start = n; v.origin = ORIGIN.slice(); }); };
+document.getElementById('tint').onchange = e => { tint = e.target.value.split(',').map(x => x / 255); };
+</script>
+</body>
+</html>

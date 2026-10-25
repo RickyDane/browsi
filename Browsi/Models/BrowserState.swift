@@ -70,7 +70,7 @@ final class BrowserState {
                           return t
                       },
                       tabs: s.tabs.filter { $0.url != Tab.homeURL }.map { Tab(id: $0.id, url: $0.url, title: $0.title) },
-                      selectedTabID: s.selectedTabID)
+                      selectedTabID: nil)   // always launch on the home page
             }
             selectedSpaceID = snap.selectedSpaceID.flatMap { id in snap.spaces.contains { $0.id == id } ? id : nil }
                 ?? snap.spaces[0].id
@@ -651,6 +651,7 @@ final class BrowserState {
     // MARK: Session persistence
 
     func scheduleSave() {
+        guard !library.isInMemory else { return }
         saveTask?.cancel()
         saveTask = Task {
             try? await Task.sleep(for: .seconds(1))
@@ -660,6 +661,8 @@ final class BrowserState {
     }
 
     func saveSessionNow() {
+        // Tests share the app's sandbox container; an in-memory library marks a non-persistent browser.
+        guard !library.isInMemory else { return }
         func t(_ tab: Tab) -> SessionSnapshot.TabState {
             .init(id: tab.id, url: tab.url, title: tab.title, pinnedURL: tab.pinnedURL)
         }

@@ -11,7 +11,8 @@ struct MainWindowView: View {
         let inset: CGFloat = prefs.edgeToEdgeContent ? 0 : 8
         ZStack {
             if prefs.spaceTheme {
-                StarfieldView(hue: space.hue, starCount: 320, animated: prefs.animatedBackground)
+                StarfieldView(hue: space.hue, starCount: 320, animated: prefs.animatedBackground,
+                              intensity: prefs.backgroundIntensity)
                     .animation(Motion.smooth, value: space.hue)
             } else {
                 MeshBackground(hue: space.hue, animated: prefs.animatedBackground)
@@ -172,7 +173,8 @@ private struct ContentCard: View {
                 if Preferences.shared.spaceTheme {
                     // Home page is the night sky itself, with shooting stars.
                     StarfieldView(hue: browser.selectedSpace.hue, starCount: 420, shootingStars: true,
-                                  animated: Preferences.shared.animatedBackground)
+                                  animated: Preferences.shared.animatedBackground,
+                                  intensity: Preferences.shared.backgroundIntensity)
                 } else {
                     Rectangle().fill(.ultraThinMaterial)
                 }

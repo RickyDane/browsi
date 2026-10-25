@@ -1,3 +1,4 @@
+import AppKit
 import WebKit
 
 struct PendingPasswordSave: Identifiable, Equatable {
@@ -26,6 +27,25 @@ final class PasswordBridge: NSObject, WKScriptMessageHandlerWithReply {
                             in: .defaultClient)
     }
 
+    /// The Passwords app icon (falls back to Keychain Access on older systems) as a PNG data URL,
+    /// so the in-page dropdown looks like the native AutoFill menu.
+    static let passwordsIconDataURL: String = {
+        let ws = NSWorkspace.shared
+        guard let app = ws.urlForApplication(withBundleIdentifier: "com.apple.Passwords")
+                ?? ws.urlForApplication(withBundleIdentifier: "com.apple.keychainaccess") else { return "" }
+        let icon = ws.icon(forFile: app.path)
+        let px = 64
+        guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: px, pixelsHigh: px,
+                                         bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                                         colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0) else { return "" }
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        icon.draw(in: NSRect(x: 0, y: 0, width: px, height: px))
+        NSGraphicsContext.restoreGraphicsState()
+        guard let png = rep.representation(using: .png, properties: [:]) else { return "" }
+        return "data:image/png;base64," + png.base64EncodedString()
+    }()
+
     func userContentController(_ ucc: WKUserContentController, didReceive message: WKScriptMessage,
                                replyHandler: @escaping @MainActor @Sendable (Any?, String?) -> Void) {
         let origin = message.frameInfo.securityOrigin
@@ -39,9 +59,9 @@ final class PasswordBridge: NSObject, WKScriptMessageHandlerWithReply {
 
         switch type {
         case "accounts":
-            guard Preferences.shared.autofillPasswords else { replyHandler([String](), nil); return }
+            guard Preferences.shared.autofillPasswords else { replyHandler(["names": [String]()], nil); return }
             let names = keychain.accounts(host: host).map(\.username)
-            replyHandler(names, nil)
+            replyHandler(["names": names, "icon": Self.passwordsIconDataURL], nil)
 
         case "fill":
             guard let username = body["username"] as? String else { replyHandler(nil, "bad request"); return }

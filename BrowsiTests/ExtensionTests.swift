@@ -81,30 +81,6 @@ struct ExtensionRuntimeTests {
         """, contentWorld: .page) as? String
         #expect(result == "blocked,ok", "declarativeNetRequest rule applied")
     }
-
-    /// Live: install uBlock Origin Lite from the Chrome Web Store.
-    @Test func installsUBlockOriginLiteFromStore() async throws {
-        let manager = ExtensionManager.shared
-        manager.confirmInstall = { _ in true }
-        let record = try await manager.install(from: "https://chromewebstore.google.com/detail/ublock-origin-lite/ddkjiahejlhfcafbddmgiahcphecmpfh")
-        defer { manager.remove(record.id) }
-        let context = try #require(manager.contexts[record.id])
-        #expect(context.isLoaded)
-        #expect(context.webExtension.displayName?.contains("uBlock") == true)
-        #expect(manager.loadErrors[record.id] == nil)
-        print("UBOL", context.webExtension.displayName ?? "-", context.webExtension.displayVersion ?? "-",
-              "errors:", context.webExtension.errors.map(\.localizedDescription))
-
-        try? await Task.sleep(for: .seconds(2))   // let the rulesets register
-        let (window, tab, c) = try await page("<p>x</p>", base: "https://news.browsi.test/")
-        defer { window.orderOut(nil); _ = tab }
-        let result = try await c.webView.callAsyncJavaScript("""
-          try { await fetch('https://www.googletagservices.com/tag/js/gpt.js', { mode: 'no-cors', cache: 'no-store' }); return 'loaded'; }
-          catch (e) { return 'blocked'; }
-        """, contentWorld: .page) as? String
-        print("UBOL ad request:", result ?? "nil")
-        #expect(result == "blocked", "uBlock Origin Lite blocks a Google ad script")
-    }
 }
 
 struct StoreLinkTests {

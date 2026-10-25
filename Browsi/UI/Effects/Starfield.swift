@@ -8,14 +8,17 @@ struct StarfieldView: View {
     var starCount = 260
     var shootingStars = false
     var animated = true
+    /// `Preferences.backgroundIntensity` (0…1); 0.85 is the default look.
+    var intensity = 0.85
     @Environment(\.appearsActive) private var appearsActive
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1 / 30, paused: !animated || !appearsActive || Motion.reduceMotion)) { ctx in
             let t = ctx.date.timeIntervalSinceReferenceDate
             Canvas { g, size in
-                Self.drawSky(&g, size, hue: hue)
-                Self.drawStars(&g, size, count: starCount, t: t)
+                let k = Self.glowScale(intensity)
+                Self.drawSky(&g, size, hue: hue, glow: k)
+                Self.drawStars(&g, size, count: starCount, t: t, brightness: min(1, 0.45 + 0.55 * k))
                 if shootingStars { Self.drawMeteors(&g, size, t: t) }
             }
         }
@@ -25,11 +28,17 @@ struct StarfieldView: View {
 
     // MARK: Drawing
 
-    static func drawSky(_ g: inout GraphicsContext, _ size: CGSize, hue: Double) {
+    /// Maps intensity to a nebula multiplier: 0 → none, 0.85 → 1 (default), 1 → 1.8.
+    nonisolated static func glowScale(_ intensity: Double) -> Double {
+        let i = min(max(intensity, 0), 1)
+        return i <= 0.85 ? i / 0.85 : 1 + (i - 0.85) / 0.15 * 0.8
+    }
+
+    static func drawSky(_ g: inout GraphicsContext, _ size: CGSize, hue: Double, glow: Double = 1) {
         let rect = CGRect(origin: .zero, size: size)
         g.fill(Path(rect), with: .linearGradient(
             Gradient(colors: [Color(red: 0.02, green: 0.025, blue: 0.07),
-                              Color(hue: hue, saturation: 0.55, brightness: 0.13),
+                              Color(hue: hue, saturation: 0.55 * min(1, glow), brightness: 0.05 + 0.08 * glow),
                               Color(red: 0.03, green: 0.02, blue: 0.08)]),
             startPoint: .zero, endPoint: CGPoint(x: size.width * 0.4, y: size.height)))
         // Nebula glows.
@@ -37,12 +46,12 @@ struct StarfieldView: View {
         for (cx, cy, dh, a) in [(0.78, 0.18, 0.0, 0.30), (0.15, 0.85, 0.12, 0.22), (0.5, 0.55, -0.08, 0.10)] {
             let c = CGPoint(x: size.width * cx, y: size.height * cy)
             g.fill(Path(rect), with: .radialGradient(
-                Gradient(colors: [Color(hue: (hue + dh + 1).truncatingRemainder(dividingBy: 1), saturation: 0.7, brightness: 0.75).opacity(a), .clear]),
+                Gradient(colors: [Color(hue: (hue + dh + 1).truncatingRemainder(dividingBy: 1), saturation: 0.7, brightness: 0.75).opacity(min(1, a * glow)), .clear]),
                 center: c, startRadius: 0, endRadius: r * 0.55))
         }
     }
 
-    static func drawStars(_ g: inout GraphicsContext, _ size: CGSize, count: Int, t: Double) {
+    static func drawStars(_ g: inout GraphicsContext, _ size: CGSize, count: Int, t: Double, brightness: Double = 1) {
         var rng = SeededRandom(seed: 0xB10_5E1)
         for _ in 0..<count {
             let x = rng.next() * size.width, y = rng.next() * size.height
@@ -54,7 +63,7 @@ struct StarfieldView: View {
             let tint = rng.next()
             let color: Color = tint < 0.15 ? Color(red: 0.75, green: 0.85, blue: 1)
                 : tint < 0.25 ? Color(red: 1, green: 0.9, blue: 0.78) : .white
-            let alpha = base * twinkle
+            let alpha = base * twinkle * brightness
             g.fill(Path(ellipseIn: CGRect(x: x - radius, y: y - radius, width: radius * 2, height: radius * 2)),
                    with: .color(color.opacity(alpha)))
             if big {   // soft halo

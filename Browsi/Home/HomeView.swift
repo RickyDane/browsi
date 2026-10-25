@@ -231,13 +231,13 @@ private struct HomeSearchBar: View {
         guard !q.isEmpty else { suggestions = []; return }
         var items = PaletteResults.build(query: q, editingCurrent: false, browser: browser,
                                          openSettings: { openSettings() }, limit: 8)
-        // Apple Intelligence is one suggestion among the others (⌘↩), right below the top hit.
+        // Apple Intelligence is the first, default suggestion for search-like queries (↩).
         if SmartSearch.isAvailable, Preferences.shared.homeSmartAnswers, case .search? = URLInputParser.parse(q) {
             let ask = PaletteItem(id: "ask-ai", kind: .search, title: q, subtitle: "", symbol: "apple.intelligence",
-                                  badge: "Ask Apple Intelligence ⌘↩") { [search, browser] in
+                                  badge: "Ask Apple Intelligence ↩") { [search, browser] in
                 search.run(q, library: browser.library)
             }
-            items.insert(ask, at: min(1, items.count))
+            items.insert(ask, at: 0)
         }
         suggestions = items
     }

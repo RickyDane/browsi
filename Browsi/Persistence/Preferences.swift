@@ -14,6 +14,37 @@ enum AppTheme: String, CaseIterable, Identifiable {
     }
 }
 
+/// Alternate app icons (Design/galaxy). macOS has no alternate-icon API, so the choice is applied
+/// to the running app's Dock icon via `NSApp.applicationIconImage`.
+enum AppIconChoice: String, CaseIterable, Identifiable {
+    case nebulaSparkle, boldViolet, goldBlue, dustLane, minimalSwirl
+    var id: String { rawValue }
+    var name: String {
+        switch self {
+        case .nebulaSparkle: "Nebula sparkle"
+        case .boldViolet: "Bold violet"
+        case .goldBlue: "Gold and blue"
+        case .dustLane: "Dust lane"
+        case .minimalSwirl: "Minimal swirl"
+        }
+    }
+    var assetName: String {
+        switch self {
+        case .boldViolet: "AppIconR1"
+        case .goldBlue: "AppIconR2"
+        case .dustLane: "AppIconR3"
+        case .minimalSwirl: "AppIconR4"
+        case .nebulaSparkle: "AppIconR5"
+        }
+    }
+    var image: NSImage? { NSImage(named: assetName) }
+
+    /// Sets the Dock icon. The default icon resets to the bundle's own icon.
+    func apply() {
+        NSApp?.applicationIconImage = self == .nebulaSparkle ? nil : image
+    }
+}
+
 enum TabDensity: String, CaseIterable, Identifiable {
     case compact, comfortable, spacious
     var id: String { rawValue }
@@ -75,12 +106,15 @@ final class Preferences {
     var homeSmartAnswers: Bool { didSet { d.set(homeSmartAnswers, forKey: "homeSmartAnswers") } }
     var restoreSession: Bool { didSet { d.set(restoreSession, forKey: "restoreSession") } }
     var confirmQuit: Bool { didSet { d.set(confirmQuit, forKey: "confirmQuit") } }
+    /// Name shown on the Profile card; empty means the macOS account's full name.
+    var profileName: String { didSet { d.set(profileName, forKey: "profileName") } }
 
     // MARK: Appearance
     var theme: AppTheme { didSet { d.set(theme.rawValue, forKey: "theme"); NSApp?.appearance = effectiveAppearance } }
     /// Space theme: starry night sky everywhere, shooting stars on the home page (always dark).
     var spaceTheme: Bool { didSet { d.set(spaceTheme, forKey: "spaceTheme"); NSApp?.appearance = effectiveAppearance } }
     var effectiveAppearance: NSAppearance? { spaceTheme ? NSAppearance(named: .darkAqua) : theme.appearance }
+    var appIcon: AppIconChoice { didSet { d.set(appIcon.rawValue, forKey: "appIcon"); appIcon.apply() } }
     var sidebarWidth: Double { didSet { d.set(sidebarWidth, forKey: "sidebarWidth") } }
     var tabDensity: TabDensity { didSet { d.set(tabDensity.rawValue, forKey: "tabDensity") } }
     var animatedBackground: Bool { didSet { d.set(animatedBackground, forKey: "animatedBackground") } }
@@ -148,9 +182,11 @@ final class Preferences {
         restoreSession = bool("restoreSession", true)
         homeSmartAnswers = bool("homeSmartAnswers", true)
         confirmQuit = bool("confirmQuit", false)
+        profileName = d.string(forKey: "profileName") ?? ""
 
         theme = raw("theme", .system)
         spaceTheme = bool("spaceTheme", true)
+        appIcon = raw("appIcon", .nebulaSparkle)
         sidebarWidth = dbl("sidebarWidth", 252)
         tabDensity = raw("tabDensity", .comfortable)
         animatedBackground = bool("animatedBackground", true)
@@ -209,7 +245,8 @@ final class Preferences {
         }
         let fresh = Preferences()
         searchEngine = fresh.searchEngine; restoreSession = fresh.restoreSession; homeSmartAnswers = fresh.homeSmartAnswers; confirmQuit = fresh.confirmQuit
-        theme = fresh.theme; spaceTheme = fresh.spaceTheme; sidebarWidth = fresh.sidebarWidth; tabDensity = fresh.tabDensity
+        profileName = fresh.profileName
+        theme = fresh.theme; spaceTheme = fresh.spaceTheme; appIcon = fresh.appIcon; sidebarWidth = fresh.sidebarWidth; tabDensity = fresh.tabDensity
         animatedBackground = fresh.animatedBackground; backgroundIntensity = fresh.backgroundIntensity
         edgeToEdgeContent = fresh.edgeToEdgeContent; reduceAnimations = fresh.reduceAnimations
         loginImpactAnimation = fresh.loginImpactAnimation
