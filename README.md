@@ -6,7 +6,7 @@ A native macOS browser built with SwiftUI and WebKit: vertical tabs, Spaces, Liq
 
 ## Features
 
-- **Home page** (⌘T): a clock, an AI search bar and a grid of live web pages ("modules") you can drag, resize, zoom and rearrange; other modules make room as you move one. Links in modules open as tabs.
+- **Home page** (always at the top of the sidebar, ⌘⇧H): a clock, an AI search bar and a grid of live web pages ("modules") you can drag, resize, zoom and rearrange; other modules make room as you move one. Links in modules open as tabs.
 - **Smart answers**: the home search bar answers questions with Apple Intelligence's on-device model, which can search the web, read pages and look through your history, and cites its sources ([1], [2]…). ⌘↩ searches the web directly.
 - **Download queue**: a downloads button at the bottom of the sidebar shows progress, and files fly into it from where you clicked. The queue offers open, reveal, cancel, retry, rename, undo rename and **Smart Rename** (Apple Intelligence) per file.
 - **Vertical tab sidebar**: pinned tiles, drag to reorder, drop a tab on the space header to pin it, hover the left edge to peek a hidden sidebar.
@@ -41,7 +41,7 @@ To work in Xcode, run `xcodegen generate` and open `Browsi.xcodeproj`. The proje
 | Action | Shortcut |
 |---|---|
 | Edit address | ⌘L |
-| New tab (home page) / Command palette | ⌘T / ⌘K |
+| New tab (palette) / Home / Command palette | ⌘T / ⌘⇧H / ⌘K |
 | Close tab / Reopen closed tab | ⌘W (pinned tabs stay pinned, just unloaded) / ⌘⇧T |
 | Toggle sidebar | ⌘S |
 | Bookmark page / Pin tab | ⌘D / ⌘⇧P |

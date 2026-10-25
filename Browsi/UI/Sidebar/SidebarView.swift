@@ -15,6 +15,7 @@ struct SidebarView: View {
 
             Group {
                 VStack(alignment: .leading, spacing: 10) {
+                    HomeRow(isSelected: space.selectedTabID == nil, selectionNamespace: selectionNS)
                     if !space.pinnedTabs.isEmpty {
                         PinnedTabsGrid(space: space, selectionNamespace: selectionNS)
                     }
@@ -35,7 +36,7 @@ struct SidebarView: View {
                     }
                     .help("Drop a tab here to pin it")
 
-                    Button { browser.newHomeTab() } label: {
+                    Button { browser.palette = .newTab } label: {
                         HStack(spacing: 9) {
                             Image(systemName: "plus").font(.system(size: 12, weight: .semibold))
                                 .rotationEffect(.degrees(newTabHover && !Motion.reduceMotion ? 90 : 0))
@@ -164,4 +165,44 @@ private struct ScrollSwipeCatcher: NSViewRepresentable {
     func updateNSView(_ nsView: NSView, context: Context) {}
 
     static func dismantleNSView(_ nsView: NSView, coordinator: ()) {}
+}
+
+/// Always-present entry at the top of every space that shows the home page.
+private struct HomeRow: View {
+    @Environment(BrowserState.self) private var browser
+    var isSelected: Bool
+    var selectionNamespace: Namespace.ID
+    @State private var hovering = false
+
+    var body: some View {
+        HStack(spacing: 9) {
+            Image(systemName: isSelected ? "house.fill" : "house")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(isSelected ? AnyShapeStyle(browser.selectedSpace.color) : AnyShapeStyle(.secondary))
+                .contentTransition(.symbolEffect(.replace))
+                .frame(width: 16)
+            Text("Home").font(.system(size: 13, weight: isSelected ? .medium : .regular))
+            Spacer()
+            Text("⌘⇧H").font(.system(size: 11)).foregroundStyle(.tertiary)
+                .opacity(hovering ? 1 : 0)
+        }
+        .padding(.horizontal, 10)
+        .frame(height: Preferences.shared.tabDensity.rowHeight)
+        .background {
+            if isSelected {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(.clear)
+                    .glassEffect(.regular.tint(.white.opacity(0.12)).interactive(),
+                                 in: .rect(cornerRadius: 10, style: .continuous))
+                    .matchedGeometryEffect(id: "selection", in: selectionNamespace)
+                    .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
+            } else if hovering {
+                RoundedRectangle(cornerRadius: 10, style: .continuous).fill(.primary.opacity(0.06))
+            }
+        }
+        .contentShape(Rectangle())
+        .onHover { h in withAnimation(.easeOut(duration: 0.12)) { hovering = h } }
+        .onTapGesture { browser.showHome() }
+        .help("Home (⌘⇧H)")
+    }
 }

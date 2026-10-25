@@ -123,19 +123,20 @@ struct PinnedAndHomeTabTests {
         #expect(!browser.allTabs.contains { $0 === pinned })
     }
 
-    @Test func homeTabsHaveNoWebViewUntilNavigated() {
+    @Test func homeIsAlwaysAvailableAndLinksOpenTabs() {
         let browser = BrowserState(library: LibraryStore(inMemory: true), restore: false)
-        let home = browser.newHomeTab()
-        #expect(home.isHome && home.controller == nil && home.displayTitle == "Home")
+        let a = browser.newTab(url: URL(string: "about:blank#a"))
+        browser.showHome()
+        #expect(browser.selectedTab == nil, "home is shown")
+        #expect(browser.allTabs.count == 1 && a.controller != nil, "the tab keeps running")
         browser.openFromHome(URL(string: "about:blank#x")!)
-        #expect(browser.selectedTab === home)
-        #expect(!home.isHome)
-        #expect(home.controller != nil)
-        // Background opens leave the selection alone.
-        let h2 = browser.newHomeTab()
+        #expect(browser.allTabs.count == 2)
+        #expect(browser.selectedTab?.url?.absoluteString == "about:blank#x")
+        browser.showHome()
         browser.openFromHome(URL(string: "about:blank#y")!, background: true)
-        #expect(browser.selectedTab === h2 && h2.isHome)
-        #expect(browser.allTabs.count == 3)
+        #expect(browser.selectedTab == nil && browser.allTabs.count == 3)
+        browser.select(a)
+        #expect(browser.selectedTab === a)
     }
 
     @Test func closingLastTabShowsHomeNotPalette() {

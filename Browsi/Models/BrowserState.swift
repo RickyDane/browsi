@@ -56,7 +56,7 @@ final class BrowserState {
                           t.pinnedURL = $0.pinnedURL ?? $0.url
                           return t
                       },
-                      tabs: s.tabs.map { Tab(id: $0.id, url: $0.url, title: $0.title) },
+                      tabs: s.tabs.filter { $0.url != Tab.homeURL }.map { Tab(id: $0.id, url: $0.url, title: $0.title) },
                       selectedTabID: s.selectedTabID)
             }
             selectedSpaceID = snap.selectedSpaceID.flatMap { id in snap.spaces.contains { $0.id == id } ? id : nil }
@@ -220,16 +220,22 @@ final class BrowserState {
 
     /// Opens a link chosen on the home page: replaces the selected home tab, otherwise opens a tab.
     func openFromHome(_ url: URL, background: Bool = false) {
-        if !background, let tab = selectedTab, tab.isHome {
-            navigate(tab, to: url)
-        } else {
-            newTab(url: url, background: background)
-        }
+        newTab(url: url, background: background)
     }
 
-    /// Opens a new tab showing the Browsi home page.
-    @discardableResult
-    func newHomeTab() -> Tab { newTab(url: Tab.homeURL) }
+    /// Shows the space's home page (deselects the current tab; the tab keeps running).
+    func showHome() {
+        let space = selectedSpace
+        guard let previous = space.selectedTab else { return }
+        closePeek()
+        if let old = previous.controller?.webView, old.window != nil {
+            Task { previous.snapshot = try? await old.takeSnapshot(configuration: nil) }
+        }
+        previous.lastActive = .now
+        withAnimation(Motion.snappy) { space.selectedTabID = nil }
+        floatingPlayer.considerPopOut(previous)
+        scheduleSave()
+    }
 
     func closeSelectedTab() {
         if let t = selectedTab { close(t) }
