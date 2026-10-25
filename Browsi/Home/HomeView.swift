@@ -488,55 +488,41 @@ private struct ModuleCard: View {
     let onResize: (CGSize, Bool) -> Void
     @State private var hovering = false
 
+    private var showsChrome: Bool { hovering || isActive }
+
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 8) {
-                Image(systemName: "line.3.horizontal").font(.system(size: 10, weight: .bold)).foregroundStyle(.tertiary)
-                Text(module.title).font(.system(size: 12, weight: .semibold)).lineLimit(1)
-                Spacer(minLength: 4)
-                if hovering {
-                    Group {
-                        button("arrow.clockwise", "Reload") { HomeWebCache.shared.reload(module.id) }
-                        button("arrow.up.forward.square", "Open as Tab") {
-                            browser.openFromHome(HomeWebCache.shared.currentURL(module.id) ?? module.url)
-                        }
-                        button("xmark", "Remove") { withAnimation(Motion.snappy) { HomeStore.shared.remove(module.id) } }
-                    }
-                    .transition(.opacity)
+        // Edge-to-edge page; the title bar only floats in while hovering.
+        ModuleWebView(module: module)
+            .allowsHitTesting(!isActive)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(alignment: .top) {
+                if showsChrome {
+                    titleBar
+                        .padding(6)
+                        .transition(.move(edge: .top).combined(with: .opacity))
                 }
             }
-            .padding(.horizontal, 12)
-            .frame(height: 32)
-            .contentShape(Rectangle())
-            .gesture(DragGesture(minimumDistance: 3, coordinateSpace: .global)
-                .onChanged { onMove($0.translation, false) }
-                .onEnded { onMove($0.translation, true) })
-            .onHover { if $0 { NSCursor.openHand.push() } else { NSCursor.pop() } }
-
-            ModuleWebView(module: module)
-                .clipShape(UnevenRoundedRectangle(bottomLeadingRadius: 12, bottomTrailingRadius: 12, style: .continuous))
-                .padding([.horizontal, .bottom], 4)
-                .allowsHitTesting(!isActive)
-        }
-        .glassEffect(.regular, in: .rect(cornerRadius: 16, style: .continuous))
-        .overlay(alignment: .bottomTrailing) {
-            // Resize handle.
-            Image(systemName: "arrow.down.right")
-                .font(.system(size: 9, weight: .bold))
-                .foregroundStyle(.secondary)
-                .frame(width: 22, height: 22)
-                .background(.regularMaterial, in: .circle)
-                .opacity(hovering || isActive ? 1 : 0)
-                .padding(4)
-                .contentShape(Rectangle())
-                .gesture(DragGesture(minimumDistance: 1, coordinateSpace: .global)
-                    .onChanged { onResize($0.translation, false) }
-                    .onEnded { onResize($0.translation, true) })
-        }
+            .overlay(alignment: .bottomTrailing) {
+                if showsChrome {
+                    // Resize handle.
+                    Image(systemName: "arrow.down.right")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 24, height: 24)
+                        .glassEffect(.regular, in: .circle)
+                        .padding(6)
+                        .contentShape(Rectangle())
+                        .gesture(DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                            .onChanged { onResize($0.translation, false) }
+                            .onEnded { onResize($0.translation, true) })
+                        .onHover { if $0 { NSCursor.frameResize(position: .bottomRight, directions: .all).push() } else { NSCursor.pop() } }
+                        .transition(.scale(scale: 0.6).combined(with: .opacity))
+                }
+            }
         .scaleEffect(isActive && !Motion.reduceMotion ? 1.02 : 1)
         .shadow(color: .black.opacity(isActive ? 0.3 : 0.1), radius: isActive ? 24 : 8, y: isActive ? 14 : 3)
         .animation(Motion.snappy, value: isActive)
-        .onHover { h in withAnimation(.easeOut(duration: 0.15)) { hovering = h } }
+        .onHover { h in withAnimation(Motion.snappy) { hovering = h } }
         .contextMenu {
             Button("Reload") { HomeWebCache.shared.reload(module.id) }
             Button("Zoom In") { setZoom(module.zoom + 0.1) }
@@ -545,6 +531,28 @@ private struct ModuleCard: View {
             Divider()
             Button("Remove", role: .destructive) { HomeStore.shared.remove(module.id) }
         }
+    }
+
+    /// Floating glass bar: drag anywhere on it to move the module.
+    private var titleBar: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "line.3.horizontal").font(.system(size: 10, weight: .bold)).foregroundStyle(.secondary)
+            Text(module.title).font(.system(size: 12, weight: .semibold)).lineLimit(1)
+            Spacer(minLength: 4)
+            button("arrow.clockwise", "Reload") { HomeWebCache.shared.reload(module.id) }
+            button("arrow.up.forward.square", "Open as Tab") {
+                browser.openFromHome(HomeWebCache.shared.currentURL(module.id) ?? module.url)
+            }
+            button("xmark", "Remove") { withAnimation(Motion.snappy) { HomeStore.shared.remove(module.id) } }
+        }
+        .padding(.horizontal, 12)
+        .frame(height: 32)
+        .glassEffect(.regular, in: .rect(cornerRadius: 10, style: .continuous))
+        .contentShape(Rectangle())
+        .gesture(DragGesture(minimumDistance: 3, coordinateSpace: .global)
+            .onChanged { onMove($0.translation, false) }
+            .onEnded { onMove($0.translation, true) })
+        .onHover { if $0 { NSCursor.openHand.push() } else { NSCursor.pop() } }
     }
 
     private func button(_ symbol: String, _ help: String, action: @escaping () -> Void) -> some View {
