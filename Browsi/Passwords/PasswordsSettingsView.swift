@@ -5,7 +5,7 @@ struct PasswordsSettingsView: View {
     @State private var items: [Credential] = []
     @State private var search = ""
     @State private var revealed: [String: String] = [:]
-    @Bindable private var prefs = Preferences.shared
+    private let prefs = Preferences.shared
 
     private var store: KeychainStore { KeychainStore(synchronizable: prefs.syncPasswordsWithICloud) }
 
@@ -13,13 +13,8 @@ struct PasswordsSettingsView: View {
         Group {
             if unlocked {
                 VStack(spacing: 0) {
-                    HStack {
-                        TextField("Search", text: $search).textFieldStyle(.roundedBorder)
-                        Toggle("Sync new passwords via iCloud Keychain", isOn: $prefs.syncPasswordsWithICloud)
-                            .toggleStyle(.switch).controlSize(.small)
-                            .help("Requires the app to be signed with a development team.")
-                    }
-                    .padding(12)
+                    TextField("Search", text: $search).textFieldStyle(.roundedBorder)
+                        .padding(12)
                     List {
                         ForEach(filtered) { c in
                             HStack(spacing: 10) {

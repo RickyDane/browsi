@@ -12,7 +12,7 @@ struct FaviconView: View {
                     .clipShape(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
                     .transition(.scale.combined(with: .opacity))
             } else {
-                Image(systemName: tab.isSuspended ? "moon.zzz.fill" : "globe")
+                Image(systemName: tab.isSuspended && Preferences.shared.showSuspendedIndicator ? "moon.zzz.fill" : "globe")
                     .font(.system(size: size * 0.8))
                     .foregroundStyle(.secondary)
                     .symbolEffect(.pulse, options: .repeating, isActive: tab.isLoading)
@@ -37,9 +37,14 @@ struct TabRow: View {
             Text(tab.displayTitle)
                 .font(.system(size: 13, weight: isSelected ? .medium : .regular))
                 .lineLimit(1)
-                .foregroundStyle(tab.isSuspended && !isSelected ? .secondary : .primary)
+                .foregroundStyle(tab.isSuspended && !isSelected && Preferences.shared.showSuspendedIndicator ? .secondary : .primary)
                 .contentTransition(.interpolate)
             Spacer(minLength: 0)
+            if tab.isInFloatingPlayer {
+                Image(systemName: "pip.fill").font(.system(size: 10)).foregroundStyle(.secondary)
+                    .symbolEffect(.pulse, options: .repeating)
+                    .help("Playing in floating window")
+            }
             if hovering || isSelected {
                 Button { browser.close(tab) } label: {
                     Image(systemName: "xmark").font(.system(size: 9, weight: .bold))
@@ -53,7 +58,7 @@ struct TabRow: View {
             }
         }
         .padding(.horizontal, 10)
-        .frame(height: 34)
+        .frame(height: Preferences.shared.tabDensity.rowHeight)
         .background {
             if isSelected {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)

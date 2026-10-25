@@ -39,6 +39,7 @@ final class PasswordBridge: NSObject, WKScriptMessageHandlerWithReply {
 
         switch type {
         case "accounts":
+            guard Preferences.shared.autofillPasswords else { replyHandler([String](), nil); return }
             let names = keychain.accounts(host: host).map(\.username)
             replyHandler(names, nil)
 
@@ -46,7 +47,7 @@ final class PasswordBridge: NSObject, WKScriptMessageHandlerWithReply {
             guard let username = body["username"] as? String else { replyHandler(nil, "bad request"); return }
             let store = keychain
             Task {
-                guard await BiometricGate.shared.authenticate(reason: "fill your password for \(host)") else {
+                guard await BiometricGate.shared.authenticate(reason: "fill your password for \(host)", force: false) else {
                     replyHandler(nil, "denied"); return
                 }
                 replyHandler(try? store.password(host: host, username: username), nil)

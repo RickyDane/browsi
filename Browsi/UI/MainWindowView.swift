@@ -7,20 +7,22 @@ struct MainWindowView: View {
 
     var body: some View {
         let space = browser.selectedSpace
+        let sidebarWidth = prefs.sidebarWidth
+        let inset: CGFloat = prefs.edgeToEdgeContent ? 0 : 8
         ZStack {
             MeshBackground(hue: space.hue, animated: prefs.animatedBackground)
-                .opacity(0.85)
+                .opacity(prefs.backgroundIntensity)
 
             HStack(spacing: 0) {
                 if browser.sidebarVisible {
                     SidebarView()
-                        .frame(width: 252)
+                        .frame(width: sidebarWidth)
                         .transition(.move(edge: .leading).combined(with: .opacity))
                 }
-                ContentCard()
-                    .padding(.vertical, 8)
-                    .padding(.trailing, 8)
-                    .padding(.leading, browser.sidebarVisible ? 0 : 8)
+                ContentCard(edgeToEdge: prefs.edgeToEdgeContent)
+                    .padding(.vertical, inset)
+                    .padding(.trailing, inset)
+                    .padding(.leading, browser.sidebarVisible ? 0 : inset)
             }
 
             if !browser.sidebarVisible {
@@ -33,7 +35,7 @@ struct MainWindowView: View {
                 if sidebarPeek {
                     HStack(spacing: 0) {
                         SidebarView()
-                            .frame(width: 252)
+                            .frame(width: sidebarWidth)
                             .glassEffect(.regular, in: .rect(cornerRadius: 16, style: .continuous))
                             .padding(8)
                             .onHover { if !$0 { withAnimation(Motion.snappy) { sidebarPeek = false } } }
@@ -41,6 +43,12 @@ struct MainWindowView: View {
                     }
                     .transition(.move(edge: .leading).combined(with: .opacity))
                 }
+            }
+
+            if let peek = browser.peek {
+                PeekOverlay(peek: peek)
+                    .transition(BlurScaleTransition(scale: 0.94, blur: 8))
+                    .zIndex(9)
             }
 
             if browser.palette != .hidden {
@@ -73,52 +81,51 @@ struct MainWindowView: View {
             }
             .padding(.top, 16)
             .frame(maxWidth: .infinity)
-            .padding(.leading, browser.sidebarVisible ? 252 : 0)
+            .padding(.leading, browser.sidebarVisible ? sidebarWidth : 0)
             .zIndex(20)
         }
         .animation(Motion.snappy, value: browser.palette)
         .animation(Motion.snappy, value: browser.sidebarVisible)
+        .animation(Motion.snappy, value: prefs.sidebarWidth)
         .frame(minWidth: 720, minHeight: 480)
         .ignoresSafeArea()
-        .background(WindowConfigurator())
+        .background(WindowConfigurator(showTrafficLights: browser.sidebarVisible || sidebarPeek))
+        .onChange(of: browser.sidebarVisible) { if $1 { sidebarPeek = false } }
     }
 }
 
 /// Rounded, shadowed card holding the web content.
+/// Tab switches are instant: one persistent host swaps web views without any transition.
 private struct ContentCard: View {
     @Environment(BrowserState.self) private var browser
+    var edgeToEdge: Bool
 
     var body: some View {
         let tab = browser.selectedTab
+        let radius: CGFloat = edgeToEdge ? 0 : 12
         ZStack(alignment: .top) {
-            if tab == nil {
-                // Empty space: let the mesh glow through a frosted card.
-                Rectangle().fill(.ultraThinMaterial)
-            } else {
-                Rectangle().fill(.background)
-            }
             if let tab {
-                ZStack {
-                    WebViewHost(tab: tab)
-                    if let snap = tab.snapshot, tab.isSuspended || tab.isLoading {
-                        Image(nsImage: snap).resizable().aspectRatio(contentMode: .fill)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                            .clipped()
-                            .allowsHitTesting(false)
-                            .transition(.opacity)
-                    }
+                Rectangle().fill(.background)
+                WebViewHost(tab: tab)
+                if tab.showsSnapshot, let snap = tab.snapshot {
+                    Image(nsImage: snap).resizable().aspectRatio(contentMode: .fill)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                        .clipped()
+                        .allowsHitTesting(false)
+                        .transition(.opacity)
                 }
-                .id(tab.id)
-                .transition(.opacity)
                 ProgressGlow(progress: tab.progress, isLoading: tab.isLoading, tint: browser.selectedSpace.color)
             } else {
+                // Empty space: let the mesh glow through a frosted card.
+                Rectangle().fill(.ultraThinMaterial)
                 EmptyStateView()
             }
         }
-        .animation(.easeInOut(duration: 0.16), value: tab?.id)
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(.primary.opacity(0.08)))
-        .shadow(color: .black.opacity(0.14), radius: 14, y: 4)
+        // No implicit/explicit animation leaks into tab swaps (avoids the page "shifting in").
+        .transaction { $0.animation = nil }
+        .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(.primary.opacity(edgeToEdge ? 0 : 0.08)))
+        .shadow(color: .black.opacity(edgeToEdge ? 0 : 0.14), radius: 14, y: 4)
     }
 }
 
@@ -155,8 +162,11 @@ struct ToastView: View {
     }
 }
 
-/// Makes the title bar transparent so the traffic lights float over the sidebar.
+/// Makes the title bar transparent so the traffic lights float over the sidebar,
+/// and hides them while the sidebar is collapsed.
 private struct WindowConfigurator: NSViewRepresentable {
+    var showTrafficLights: Bool
+
     func makeNSView(context: Context) -> NSView {
         let v = NSView()
         DispatchQueue.main.async {
@@ -167,8 +177,32 @@ private struct WindowConfigurator: NSViewRepresentable {
             w.isMovableByWindowBackground = true
             w.backgroundColor = .windowBackgroundColor
             w.tabbingMode = .disallowed
+            Self.setTrafficLights(visible: showTrafficLights, in: w, animated: false)
         }
         return v
     }
-    func updateNSView(_ nsView: NSView, context: Context) {}
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        guard let w = nsView.window else { return }
+        Self.setTrafficLights(visible: showTrafficLights, in: w, animated: true)
+    }
+
+    static func setTrafficLights(visible: Bool, in window: NSWindow, animated: Bool) {
+        // In full screen the buttons live in the menu-bar reveal area; leave them alone there.
+        let show = visible || window.styleMask.contains(.fullScreen)
+        let buttons = [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton]
+            .compactMap { window.standardWindowButton($0) }
+        guard buttons.contains(where: { $0.isHidden == show }) || !animated else { return }
+        if show { buttons.forEach { $0.isHidden = false } }
+        NSAnimationContext.runAnimationGroup({ ctx in
+            ctx.duration = animated && !Motion.reduceMotion ? 0.18 : 0
+            buttons.forEach { $0.animator().alphaValue = show ? 1 : 0 }
+        }, completionHandler: {
+            MainActor.assumeIsolated {
+                if !show, !(window.standardWindowButton(.closeButton)?.alphaValue ?? 0 > 0) {
+                    buttons.forEach { $0.isHidden = true }
+                }
+            }
+        })
+    }
 }

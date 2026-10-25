@@ -9,6 +9,7 @@ protocol TabEventsDelegate: AnyObject {
     func tabDidClose(_ tab: Tab)
     func tabDidFinishNavigation(_ tab: Tab)
     func tabTitleDidChange(_ tab: Tab)
+    func peek(url: URL, from tab: Tab)
 }
 
 /// Owns one WKWebView and mirrors its state into a `Tab`.
@@ -16,6 +17,8 @@ final class TabWebController: NSObject {
     let webView: WKWebView
     unowned let tab: Tab
     weak var delegate: TabEventsDelegate?
+    /// Peek previews don't record history and can't spawn nested peeks.
+    var isPeek = false
     private var observations: [NSKeyValueObservation] = []
 
     init(tab: Tab, configuration: WKWebViewConfiguration = WebConfigFactory.make(), delegate: TabEventsDelegate?) {
@@ -27,7 +30,8 @@ final class TabWebController: NSObject {
         webView.uiDelegate = self
         webView.allowsBackForwardNavigationGestures = true
         webView.allowsMagnification = true
-        webView.isInspectable = true
+        webView.isInspectable = Preferences.shared.webInspectorEnabled
+        webView.customUserAgent = UserAgent.current
         webView.underPageBackgroundColor = .windowBackgroundColor
         webView.pageZoom = tab.zoom
         observe()
@@ -90,11 +94,20 @@ extension TabWebController: WKNavigationDelegate {
                  preferences: WKWebpagePreferences) async -> (WKNavigationActionPolicy, WKWebpagePreferences) {
         if action.shouldPerformDownload { return (.download, preferences) }
 
-        // ⌘-click / middle-click → background tab
-        if action.navigationType == .linkActivated,
-           action.modifierFlags.contains(.command) || action.buttonNumber == 2 {
-            delegate?.openInNewTab(action.request, from: tab, background: !action.modifierFlags.contains(.shift))
-            return (.cancel, preferences)
+        if action.navigationType == .linkActivated {
+            let flags = action.modifierFlags
+            // ⌘-click / middle-click → new tab (⇧ inverts background/foreground)
+            if flags.contains(.command) || action.buttonNumber == 2 {
+                let background = Preferences.shared.commandClickOpensInBackground != flags.contains(.shift)
+                delegate?.openInNewTab(action.request, from: tab, background: background)
+                return (.cancel, preferences)
+            }
+            // ⇧-click → Link Peek
+            if flags.contains(.shift), !flags.contains(.option), Preferences.shared.linkPeekEnabled,
+               !isPeek, let url = action.request.url {
+                delegate?.peek(url: url, from: tab)
+                return (.cancel, preferences)
+            }
         }
 
         if let url = action.request.url, let scheme = url.scheme?.lowercased(),
@@ -170,7 +183,20 @@ extension TabWebController: WKNavigationDelegate {
 extension TabWebController: WKUIDelegate {
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
                  for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
-        delegate?.openPopup(configuration: configuration, from: tab)
+        // target=_blank links with modifiers behave like regular links with modifiers.
+        if navigationAction.navigationType == .linkActivated, let url = navigationAction.request.url {
+            let flags = navigationAction.modifierFlags
+            if flags.contains(.command) || navigationAction.buttonNumber == 2 {
+                let background = Preferences.shared.commandClickOpensInBackground != flags.contains(.shift)
+                delegate?.openInNewTab(navigationAction.request, from: tab, background: background)
+                return nil
+            }
+            if flags.contains(.shift), Preferences.shared.linkPeekEnabled, !isPeek {
+                delegate?.peek(url: url, from: tab)
+                return nil
+            }
+        }
+        return delegate?.openPopup(configuration: configuration, from: tab)
     }
 
     func webViewDidClose(_ webView: WKWebView) {

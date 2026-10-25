@@ -25,6 +25,9 @@ final class BrowserState {
     var toast: Toast?
     /// +1 / -1 direction of the last space switch, drives the push transition.
     var spaceSwitchDirection: Int = 1
+    /// Link Peek preview (⇧-click), shown as a modal over the content.
+    var peek: PeekState?
+    let floatingPlayer = FloatingPlayer()
 
     let library: LibraryStore
     @ObservationIgnored private var closedTabs: [(url: URL, spaceID: UUID)] = []
@@ -50,6 +53,7 @@ final class BrowserState {
             selectedSpaceID = s.id
         }
         suspender = TabSuspender(browser: self)
+        floatingPlayer.browser = self
         WebConfigFactory.passwordBridge.onOfferSave = { [weak self] offer in
             withAnimation(.bouncy) { self?.pendingPasswordSave = offer }
         }
@@ -82,6 +86,8 @@ final class BrowserState {
         withAnimation(Motion.snappy) {
             if let anchor, let i = space.tabs.firstIndex(where: { $0 === anchor }) {
                 space.tabs.insert(tab, at: i + 1)
+            } else if Preferences.shared.newTabPosition == .bottom {
+                space.tabs.append(tab)
             } else {
                 space.tabs.insert(tab, at: 0)
             }
@@ -98,7 +104,9 @@ final class BrowserState {
 
     func select(_ tab: Tab) {
         let previous = selectedTab
+        if tab.isInFloatingPlayer { floatingPlayer.close(returnTo: tab) }
         if previous === tab { return }
+        peek = nil
         if let space = space(of: tab), space.id != selectedSpaceID { switchSpace(to: space) }
         if let old = previous?.controller?.webView, old.window != nil {
             // Grab a snapshot while still on-screen; used if the tab is later suspended.
@@ -107,6 +115,7 @@ final class BrowserState {
         previous?.lastActive = .now
         withAnimation(Motion.snappy) { space(of: tab)?.selectedTabID = tab.id }
         activate(tab)
+        if let previous, previous !== tab { floatingPlayer.considerPopOut(previous) }
         scheduleSave()
     }
 
@@ -118,10 +127,16 @@ final class BrowserState {
         tab.controller = c
         c.restore(interactionState: tab.interactionState, fallback: tab.url)
         tab.interactionState = nil
-        // Drop the placeholder snapshot once the revived page has painted.
+        guard tab.snapshot != nil else { return }
+        // Show the snapshot while reviving; drop it once the page has loaded (max ~3 s).
+        tab.showsSnapshot = true
         Task {
-            try? await Task.sleep(for: .milliseconds(600))
-            withAnimation(.easeOut(duration: 0.25)) { tab.snapshot = nil }
+            try? await Task.sleep(for: .milliseconds(150))
+            for _ in 0..<30 where tab.isLoading || tab.progress < 0.5 {
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+            try? await Task.sleep(for: .milliseconds(120))
+            withAnimation(.easeOut(duration: 0.2)) { tab.showsSnapshot = false }
         }
     }
 
@@ -135,6 +150,8 @@ final class BrowserState {
             space.tabs.removeAll { $0 === tab }
             space.pinnedTabs.removeAll { $0 === tab }
         }
+        if tab.isInFloatingPlayer { floatingPlayer.close(returnTo: nil) }
+        if peek?.tab === tab { peek = nil }
         tab.controller?.webView.stopLoading()
         tab.controller = nil
         if wasSelected {
@@ -142,6 +159,9 @@ final class BrowserState {
             if remaining.isEmpty {
                 space.selectedTabID = nil
                 palette = .newTab
+            } else if Preferences.shared.closeTabSelection == .recent,
+                      let recent = remaining.max(by: { $0.lastActive < $1.lastActive }) {
+                select(recent)
             } else {
                 select(remaining[min(idx, remaining.count - 1)])
             }
@@ -229,12 +249,16 @@ final class BrowserState {
         let from = spaces.firstIndex { $0.id == selectedSpaceID } ?? 0
         let to = spaces.firstIndex { $0.id == space.id } ?? 0
         spaceSwitchDirection = to >= from ? 1 : -1
-        selectedTab?.lastActive = .now
+        let previous = selectedTab
+        previous?.lastActive = .now
+        peek = nil
         withAnimation(Motion.smooth) { selectedSpaceID = space.id }
         if let tab = space.selectedTab ?? space.allTabs.first {
+            if tab.isInFloatingPlayer { floatingPlayer.close(returnTo: tab) }
             space.selectedTabID = tab.id
             activate(tab)
         }
+        if let previous, previous !== selectedTab { floatingPlayer.considerPopOut(previous) }
         scheduleSave()
     }
 
@@ -263,9 +287,37 @@ final class BrowserState {
         if space.id == selectedSpaceID {
             switchSpace(to: spaces.first { $0.id != space.id }!)
         }
+        if let t = floatingPlayer.tab, space.allTabs.contains(where: { $0 === t }) { floatingPlayer.close(returnTo: nil) }
         space.allTabs.forEach { $0.controller = nil }
         withAnimation(Motion.snappy) { spaces.removeAll { $0.id == space.id } }
         scheduleSave()
+    }
+
+    // MARK: Link Peek
+
+    func closePeek() {
+        guard let p = peek else { return }
+        withAnimation(Motion.snappy) { peek = nil }
+        p.tab.controller?.webView.stopLoading()
+        // Let the dismiss transition finish before tearing the web view down.
+        Task {
+            try? await Task.sleep(for: .milliseconds(400))
+            if self.peek?.tab !== p.tab { p.tab.controller = nil }
+        }
+    }
+
+    /// Turns the preview into a real tab next to the tab it was opened from.
+    func promotePeek() {
+        guard let p = peek else { return }
+        let space = space(of: p.source) ?? selectedSpace
+        p.tab.controller?.isPeek = false
+        if let url = p.tab.url { library.recordVisit(url: url, title: p.tab.title) }
+        peek = nil
+        withAnimation(Motion.snappy) {
+            let i = space.tabs.firstIndex { $0 === p.source }.map { $0 + 1 } ?? 0
+            space.tabs.insert(p.tab, at: i)
+        }
+        select(p.tab)
     }
 
     // MARK: Library
@@ -347,6 +399,12 @@ final class BrowserState {
 
 enum PasswordSaveChoice { case save, never, notNow }
 
+struct PeekState: Identifiable {
+    let tab: Tab
+    let source: Tab
+    var id: UUID { tab.id }
+}
+
 // MARK: - TabEventsDelegate
 
 extension BrowserState: TabEventsDelegate {
@@ -368,9 +426,21 @@ extension BrowserState: TabEventsDelegate {
         return c.webView
     }
 
-    func tabDidClose(_ tab: Tab) { close(tab) }
+    func tabDidClose(_ tab: Tab) {
+        if peek?.tab === tab { closePeek() } else { close(tab) }
+    }
+
+    func peek(url: URL, from tab: Tab) {
+        let peekTab = Tab(url: url)
+        let c = TabWebController(tab: peekTab, delegate: self)
+        c.isPeek = true
+        peekTab.controller = c
+        c.load(url)
+        withAnimation(Motion.bouncy) { peek = PeekState(tab: peekTab, source: tab) }
+    }
 
     func tabDidFinishNavigation(_ tab: Tab) {
+        if tab.controller?.isPeek == true { return }
         if let url = tab.url { library.recordVisit(url: url, title: tab.title) }
         scheduleSave()
     }

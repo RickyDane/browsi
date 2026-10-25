@@ -12,7 +12,7 @@ struct URLBarView: View {
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(.secondary)
                 .contentTransition(.symbolEffect(.replace))
-            Text(host.map { $0.replacingOccurrences(of: "www.", with: "") } ?? "Search or enter address")
+            Text(addressText(tab) ?? "Search or enter address")
                 .font(.system(size: 12.5, weight: .medium))
                 .foregroundStyle(host == nil ? .secondary : .primary)
                 .lineLimit(1)
@@ -49,5 +49,11 @@ struct URLBarView: View {
         .contentShape(Rectangle())
         .onTapGesture { withAnimation(Motion.bouncy) { browser.palette = .editCurrent } }
         .animation(Motion.snappy, value: host)
+    }
+
+    private func addressText(_ tab: Tab?) -> String? {
+        guard let url = tab?.url else { return nil }
+        if Preferences.shared.showFullURL { return url.absoluteString }
+        return url.host()?.replacingOccurrences(of: "www.", with: "")
     }
 }

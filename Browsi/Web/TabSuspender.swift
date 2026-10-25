@@ -43,7 +43,7 @@ final class TabSuspender {
     }
 
     func shouldSuspend(_ tab: Tab, selected: Tab?, force: Bool, threshold: TimeInterval, now: Date) -> Bool {
-        guard tab !== selected, !tab.isSuspended else { return false }
+        guard tab !== selected, !tab.isSuspended, !tab.isInFloatingPlayer else { return false }
         return force || now.timeIntervalSince(tab.lastActive) >= threshold
     }
 

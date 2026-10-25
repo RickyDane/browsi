@@ -2,7 +2,9 @@ import SwiftUI
 
 /// Shared motion vocabulary. Falls back to simple fades when Reduce Motion is on.
 enum Motion {
-    static var reduceMotion: Bool { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
+    static var reduceMotion: Bool {
+        NSWorkspace.shared.accessibilityDisplayShouldReduceMotion || Preferences.shared.reduceAnimations
+    }
 
     static var snappy: Animation { reduceMotion ? .easeInOut(duration: 0.15) : .snappy(duration: 0.32, extraBounce: 0.06) }
     static var bouncy: Animation { reduceMotion ? .easeInOut(duration: 0.15) : .bouncy(duration: 0.45, extraBounce: 0.12) }

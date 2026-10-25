@@ -8,10 +8,13 @@ A native macOS browser built with SwiftUI and WebKit: vertical tabs, Spaces, Liq
 
 - **Vertical tab sidebar**: pinned tiles, drag to reorder, drop a tab on the space header to pin it, hover the left edge to peek a hidden sidebar.
 - **Spaces**: each with its own colour, icon and animated mesh-gradient tint. Switch with ⌃1–9, ⌘⌥←/→ or a two-finger swipe on the sidebar.
+- **Floating video**: leave a tab that's playing a video and the video pops out into a floating window you can drag and resize (double-click it to go back to the tab).
+- **Link Peek**: ⇧-click a link to preview it in a glass modal. ⌘↩ opens it as a tab, Esc closes it.
 - **Command palette** (⌘T / ⌘L / ⌘K): fuzzy search across open tabs, bookmarks, history and commands, with URL-or-search fallback.
 - **Keychain passwords**: captures logins, offers to save them as Keychain items, autofills behind Touch ID, and has a password manager in Settings.
 - **Tracker & ad blocking**: a compiled WebKit content rule list, toggled per site from the shield in the address bar.
 - **Performance**: only the visible tab is attached to the window; idle tabs are suspended (snapshot + state saved, web view released) after a timeout or under memory pressure.
+- **Settings**: a System-Settings-style window with ~40 options across General, Appearance, Tabs & Spaces, Privacy & Security, Passwords, Websites, Downloads and Advanced.
 - **History & bookmarks**: stored with SwiftData. Sessions (spaces and tabs) are restored on launch.
 - **Glass & motion**: `.glassEffect`, morphing selection, a glowing progress bar, blur-scale transitions. Everything respects Reduce Motion.
 
@@ -38,6 +41,7 @@ To work in Xcode, run `xcodegen generate` and open `Browsi.xcodeproj`. The proje
 | Select tab 1–9 / Next–previous tab | ⌘1–9 / ⌃Tab, ⌘⇧] ⌘⇧[ |
 | Select space 1–9 / Next–previous space | ⌃1–9 / ⌘⌥→ ⌘⌥← |
 | New space | ⌘⇧N |
+| Link Peek / open peek as tab / close | ⇧-click / ⌘↩ / Esc |
 | Zoom | ⌘+ / ⌘- / ⌘0 |
 
 ## Passwords & signing

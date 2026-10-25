@@ -6,16 +6,23 @@ enum WebConfigFactory {
 
     /// Each tab gets its own user content controller so blocking can be toggled per tab.
     static func make() -> WKWebViewConfiguration {
+        let prefs = Preferences.shared
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .default()
-        config.applicationNameForUserAgent = "Version/26.0 Safari/605.1.15"
         config.preferences.isElementFullscreenEnabled = true
         config.preferences.isTextInteractionEnabled = true
+        config.preferences.isFraudulentWebsiteWarningEnabled = prefs.fraudWarnings
+        config.preferences.javaScriptCanOpenWindowsAutomatically = !prefs.blockPopups
+        config.preferences.minimumFontSize = prefs.minimumFontSize
         config.allowsAirPlayForMediaPlayback = true
-        config.mediaTypesRequiringUserActionForPlayback = []
-        config.defaultWebpagePreferences.allowsContentJavaScript = true
+        config.mediaTypesRequiringUserActionForPlayback = switch prefs.autoplay {
+        case .allowAll: []
+        case .blockAudio: .audio
+        case .blockAll: .all
+        }
+        config.defaultWebpagePreferences.allowsContentJavaScript = prefs.javaScriptEnabled
         config.defaultWebpagePreferences.preferredContentMode = .desktop
-        config.upgradeKnownHostsToHTTPS = true
+        config.upgradeKnownHostsToHTTPS = prefs.upgradeToHTTPS
 
         let ucc = WKUserContentController()
         if let autofillScript { ucc.addUserScript(autofillScript) }

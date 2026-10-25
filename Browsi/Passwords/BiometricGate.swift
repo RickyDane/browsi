@@ -5,10 +5,12 @@ import LocalAuthentication
 /// A successful unlock is reused for a short grace period.
 final class BiometricGate {
     static let shared = BiometricGate()
-    var gracePeriod: TimeInterval = 300
+    var gracePeriod: TimeInterval { TimeInterval(Preferences.shared.authGracePeriod) }
     private var unlockedAt: Date?
 
-    func authenticate(reason: String) async -> Bool {
+    /// - Parameter force: always prompt, ignoring the "require authentication to fill" preference.
+    func authenticate(reason: String, force: Bool = true) async -> Bool {
+        if !force && !Preferences.shared.requireAuthToFill { return true }
         if let t = unlockedAt, Date.now.timeIntervalSince(t) < gracePeriod { return true }
         let context = LAContext()
         context.localizedFallbackTitle = "Use Password"

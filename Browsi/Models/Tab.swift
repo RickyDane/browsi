@@ -14,11 +14,15 @@ final class Tab: Identifiable {
     var canGoForward = false
     var isSecure = false
     var isPinned: Bool
+    /// True while the tab's web view lives in the floating video window.
+    var isInFloatingPlayer = false
     var lastActive = Date()
-    var zoom: Double = 1
+    var zoom: Double = Preferences.shared.defaultZoom
 
     /// Snapshot shown while a suspended tab is waking up.
     var snapshot: NSImage?
+    /// True while a revived tab is still painting and the snapshot covers it.
+    var showsSnapshot = false
     /// Back/forward list + scroll position saved when suspending.
     @ObservationIgnored var interactionState: Any?
     var controller: TabWebController?

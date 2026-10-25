@@ -40,6 +40,9 @@ MainWindowView
 | `Web/TabWebController.swift` | Owns the `WKWebView`; KVO → `Tab`; navigation/UI delegates, error page, popups, downloads. |
 | `Web/WebConfigFactory.swift` | Per-tab `WKWebViewConfiguration` (own `WKUserContentController`, autofill script, rule list). |
 | `Web/WebViewHost.swift` | Re-parents the selected tab's web view into the SwiftUI tree. |
+| `Web/FloatingPlayer.swift` | Moves a playing tab's web view into a floating `NSPanel` and restyles the video (via JS in the isolated world) to fill it. |
+| `UI/PeekOverlay.swift` | ⇧-click Link Peek modal; the peek tab is promoted to a real tab with `BrowserState.promotePeek()`. |
+| `Persistence/Preferences.swift` | Every setting, plus `UserAgent` (claims the installed Safari version so Google sign-in accepts the engine). |
 | `Web/TabSuspender.swift` | 30 s sweep + memory-pressure source; snapshot + `interactionState`, then release. |
 | `Passwords/KeychainStore.swift` | `SecItem*` wrapper; probes the data-protection keychain, falls back to the login keychain. |
 | `Passwords/PasswordBridge.swift` + `Resources/autofill.js` | JS ↔ native messages `accounts` / `fill` / `submit` in the isolated `.defaultClient` content world. |
@@ -68,7 +71,12 @@ MainWindowView
 
 **Done:** everything listed under Features in the README; unit tests for the parser, palette ranking, keychain, blocker rules and suspension logic.
 
-**Not yet verified manually:** the end-to-end autofill/Touch ID flow, swipe gestures, drag-and-drop, and blocker effectiveness on real sites.
+**Notes:**
+- Tab switches are deliberately un-animated: one persistent `WebViewHost` swaps web views, and `.transaction { $0.animation = nil }` keeps springs from leaking in.
+- The traffic lights fade out while the sidebar is collapsed and return when it is shown or peeked.
+- Many web settings (JS, autoplay, pop-ups, HTTPS upgrade, fraud warnings, min font, zoom, inspector) apply to newly created tabs.
+
+**Not yet verified manually:** the end-to-end autofill/Touch ID flow, floating video on major sites (YouTube, Netflix, Twitch), Google sign-in, swipe gestures, drag-and-drop, and blocker effectiveness on real sites.
 
 **Known limitations**
 - Single window; no private-browsing window yet.
