@@ -238,32 +238,29 @@ private struct ContentCard: View {
         .transaction { $0.animation = nil }
         .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(.primary.opacity(edgeToEdge ? 0 : 0.08)))
-        .modifier(CardShadow(radius: radius, hidden: edgeToEdge, fromContent: tab?.isHome ?? true))
+        .background { if !edgeToEdge { CardShadow(radius: radius) } }
     }
 }
 
-/// The content card's drop shadow. Web pages get it from an opaque rounded rectangle *behind* the card:
-/// a shadow on the card itself is derived from everything rendered inside it, so every change to the
-/// page's layers (e.g. YouTube fading its controls over a playing video) re-renders the shadow from the
-/// live video, which flickers. The translucent home card can't hide a filled shape, so it keeps the
-/// content shadow (no web view there).
-private struct CardShadow: ViewModifier {
+/// The content card's drop shadow, drawn from a plain rounded rectangle behind the card with its interior
+/// cut out (so it also works under the translucent home card). A `.shadow` on the card itself is derived
+/// from everything rendered inside it, so every layer change on the page (e.g. YouTube fading its controls
+/// over a playing video) re-rendered the shadow from the live video, which flickered.
+/// It must not depend on the selected tab: switching view structure inside the card's animated tab swap
+/// briefly duplicates the web view host, which then orphans the web view (blank page).
+private struct CardShadow: View {
     let radius: CGFloat
-    let hidden: Bool
-    let fromContent: Bool
 
-    func body(content: Content) -> some View {
-        if hidden {
-            content
-        } else if fromContent {
-            content.shadow(color: .black.opacity(0.14), radius: 14, y: 4)
-        } else {
-            content.background {
-                RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .fill(.background)
-                    .shadow(color: .black.opacity(0.14), radius: 14, y: 4)
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        shape.fill(.black)
+            .shadow(color: .black.opacity(0.14), radius: 14, y: 4)
+            .mask {
+                Rectangle().padding(-48)
+                    .overlay { shape.blendMode(.destinationOut) }
+                    .compositingGroup()
             }
-        }
+            .allowsHitTesting(false)
     }
 }
 
