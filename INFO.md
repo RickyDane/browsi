@@ -56,6 +56,8 @@ MainWindowView
 | `Home/SmartSearch.swift` | Foundation Models session with tools `searchWeb` (DuckDuckGo HTML), `readWebPage`, `searchMyHistory`; streams answers with numbered citations. |
 | `UI/Downloads/DownloadsView.swift` | Downloads button, queue popover, arc flight animation (`ArcFlight`). |
 | `Passwords/PasskeyAuthenticator.swift`, `Resources/webauthn.js` | Built-in WebAuthn platform authenticator (ES256, "none" attestation, Keychain storage, Touch ID per ceremony); page-world script overrides `navigator.credentials` for `publicKey` requests. Origin comes from WKFrameInfo; RP ID validated against it. |
+| `Extensions/ExtensionManager.swift` | `WKWebExtensionController` + contexts: install (Chrome Web Store CRX → ZIP, files, folders), grant requested permissions on install, persist `extensions.json`, controller delegate (tabs, options, permission prompts, action popups) and tab/window adapters. |
+| `Extensions/ExtensionsViews.swift` | Sidebar extension toolbar, Settings › Extensions pane. |
 | `Web/TabSuspender.swift` | 30 s sweep + memory-pressure source; snapshot + `interactionState`, then release. |
 | `Passwords/KeychainStore.swift` | `SecItem*` wrapper; probes the data-protection keychain, falls back to the login keychain. |
 | `Passwords/PasswordBridge.swift` + `Resources/autofill.js` | JS ↔ native messages `accounts` / `fill` / `submit` in the isolated `.defaultClient` content world. |

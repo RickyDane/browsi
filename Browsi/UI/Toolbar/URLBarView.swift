@@ -18,6 +18,22 @@ struct URLBarView: View {
                 .lineLimit(1)
                 .contentTransition(.numericText())
             Spacer(minLength: 0)
+            if let storeID = tab?.url.flatMap({ ExtensionPackage.storeID(from: $0.absoluteString) }),
+               !ExtensionManager.shared.records.contains(where: { $0.storeID == storeID }) {
+                Button {
+                    Task {
+                        do { try await ExtensionManager.shared.installFromStore(storeID) }
+                        catch let e as ExtensionInstallError where e == .cancelled {}
+                        catch { browser.showToast("exclamationmark.triangle.fill", error.localizedDescription) }
+                    }
+                } label: {
+                    Label("Add", systemImage: "puzzlepiece.extension.fill").labelStyle(.titleAndIcon)
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                .buttonStyle(.glassProminent).controlSize(.mini)
+                .help("Add this extension to Browsi")
+                .transition(.scale.combined(with: .opacity))
+            }
             if host != nil {
                 let blocking = ContentBlocker.shared.isEnabled(for: host)
                 Button { browser.toggleBlockingForSelectedSite() } label: {

@@ -94,6 +94,7 @@ final class BrowserState {
         MiddleClickCloser.shared.install(browser: self)
         installClickTracker()
         installNavigationButtons()
+        ExtensionManager.shared.start(browser: self)
         DownloadManager.shared.browser = self
         Task {
             _ = await ContentBlocker.shared.load()
@@ -149,6 +150,7 @@ final class BrowserState {
         previous?.lastActive = .now
         withAnimation(Motion.snappy) { space(of: tab)?.selectedTabID = tab.id }
         activate(tab)
+        ExtensionManager.shared.didActivate(tab.controller, previous: previous?.controller)
         if let previous, previous !== tab { floatingPlayer.considerPopOut(previous) }
         scheduleSave()
     }

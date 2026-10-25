@@ -2,7 +2,7 @@ import SwiftUI
 import WebKit
 
 enum SettingsPane: String, CaseIterable, Identifiable {
-    case general, appearance, tabs, privacy, passwords, websites, downloads, advanced
+    case general, appearance, tabs, privacy, passwords, extensions, websites, downloads, advanced
     var id: String { rawValue }
 
     var title: String {
@@ -12,6 +12,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .tabs: "Tabs & Spaces"
         case .privacy: "Privacy & Security"
         case .passwords: "Passwords"
+        case .extensions: "Extensions"
         case .websites: "Websites"
         case .downloads: "Downloads"
         case .advanced: "Advanced"
@@ -25,10 +26,17 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .tabs: "square.stack.fill"
         case .privacy: "hand.raised.fill"
         case .passwords: "key.fill"
+        case .extensions: "puzzlepiece.extension.fill"
         case .websites: "globe"
         case .downloads: "arrow.down.circle.fill"
         case .advanced: "wrench.and.screwdriver.fill"
         }
+    }
+
+    /// Opens the Settings window on this pane.
+    @MainActor static func open(_ pane: SettingsPane) {
+        UserDefaults.standard.set(pane.rawValue, forKey: "settingsTab")
+        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
     }
 
     var color: Color {
@@ -38,6 +46,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .tabs: .purple
         case .privacy: .blue
         case .passwords: .orange
+        case .extensions: .cyan
         case .websites: .teal
         case .downloads: .green
         case .advanced: .pink
@@ -75,6 +84,7 @@ struct SettingsView: View {
                 case .tabs: TabsPane()
                 case .privacy: PrivacyPane()
                 case .passwords: PasswordsPane()
+                case .extensions: ExtensionsPane()
                 case .websites: WebsitesPane()
                 case .downloads: DownloadsPane()
                 case .advanced: AdvancedPane()

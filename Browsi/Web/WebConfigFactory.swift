@@ -23,6 +23,7 @@ enum WebConfigFactory {
         config.defaultWebpagePreferences.allowsContentJavaScript = prefs.javaScriptEnabled
         config.defaultWebpagePreferences.preferredContentMode = .desktop
         config.upgradeKnownHostsToHTTPS = prefs.upgradeToHTTPS
+        config.webExtensionController = ExtensionManager.shared.controller
 
         let ucc = WKUserContentController()
         if let autofillScript { ucc.addUserScript(autofillScript) }

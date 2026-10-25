@@ -221,6 +221,9 @@ enum PaletteResults {
             PaletteItem(id: "cmd-settings", kind: .command, title: "Settings", subtitle: "", symbol: "gearshape") {
                 openSettings()
             },
+            PaletteItem(id: "cmd-extensions", kind: .command, title: "Extensions", subtitle: "", symbol: "puzzlepiece.extension.fill") {
+                SettingsPane.open(.extensions)
+            },
             PaletteItem(id: "cmd-passwords", kind: .command, title: "Passwords", subtitle: "", symbol: "key.fill") {
                 UserDefaults.standard.set("passwords", forKey: "settingsTab"); openSettings()
             },

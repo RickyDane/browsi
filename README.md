@@ -19,6 +19,7 @@ A native macOS browser built with SwiftUI and WebKit: vertical tabs, Spaces, Liq
 - **Passkeys**: full WebAuthn via WebKit (iCloud Keychain, password-manager apps, iPhone via QR code, security keys, passkey autofill), once the build carries Apple's browser passkey entitlement (see below).
 - **Command palette** (⌘T / ⌘L / ⌘K): fuzzy search across open tabs, bookmarks, history and commands, with URL-or-search fallback.
 - **Keychain passwords**: captures logins, offers to save them as Keychain items, autofills behind Touch ID, and has a password manager in Settings.
+- **Extensions**: install Chrome Web Store extensions (paste a link, use "Add" on the store page, or pick one in Settings › Extensions) or load a .crx / .zip / unpacked folder. Runs on WebKit's web extension engine (MV2 + MV3): content scripts, declarativeNetRequest, background workers, toolbar buttons with popups, options pages. Popular picks: uBlock Origin Lite, Dark Reader, SponsorBlock, Return YouTube Dislike, Bitwarden.
 - **Tracker & ad blocking**: a compiled WebKit content rule list, toggled per site from the shield in the address bar.
 - **Performance**: only the visible tab is attached to the window; idle tabs are suspended (snapshot + state saved, web view released) after a timeout or under memory pressure.
 - **Settings**: a System-Settings-style window with ~40 options across General, Appearance, Tabs & Spaces, Privacy & Security, Passwords, Websites, Downloads and Advanced.

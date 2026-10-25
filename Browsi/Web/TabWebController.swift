@@ -35,6 +35,7 @@ final class TabWebController: NSObject {
         webView.underPageBackgroundColor = .windowBackgroundColor
         webView.pageZoom = tab.zoom
         observe()
+        ExtensionManager.shared.didOpen(self)
     }
 
     deinit {
@@ -86,6 +87,7 @@ final class TabWebController: NSObject {
     /// Stops everything the page is doing. Dropping the last reference to a WKWebView does not
     /// reliably stop audio (other objects/tasks can keep it alive), so pages are unloaded explicitly.
     func tearDown() {
+        ExtensionManager.shared.didClose(self)
         observations.forEach { $0.invalidate() }
         observations.removeAll()
         silence()
