@@ -488,6 +488,9 @@ private struct ModuleCard: View {
     let onResize: (CGSize, Bool) -> Void
     @State private var hovering = false
 
+    /// Full title bar only while the pointer is on the grab pill/bar (or dragging),
+    /// so the page underneath stays clickable.
+    @State private var barExpanded = false
     private var showsChrome: Bool { hovering || isActive }
 
     var body: some View {
@@ -496,10 +499,27 @@ private struct ModuleCard: View {
             .allowsHitTesting(!isActive)
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay(alignment: .top) {
-                if showsChrome {
+                if barExpanded || isActive {
                     titleBar
                         .padding(6)
+                        .onHover { inside in
+                            if !inside, !isActive { withAnimation(Motion.snappy) { barExpanded = false } }
+                        }
                         .transition(.move(edge: .top).combined(with: .opacity))
+                } else if showsChrome {
+                    // Small grab pill: the only thing covering the page until it's hovered.
+                    Capsule()
+                        .fill(.clear)
+                        .frame(width: 44, height: 6)
+                        .glassEffect(.regular, in: .capsule)
+                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .contentShape(Rectangle())
+                        .onHover { if $0 { withAnimation(Motion.snappy) { barExpanded = true } } }
+                        .gesture(DragGesture(minimumDistance: 3, coordinateSpace: .global)
+                            .onChanged { onMove($0.translation, false) }
+                            .onEnded { onMove($0.translation, true) })
+                        .help("Drag to move")
+                        .transition(.scale(scale: 0.5, anchor: .top).combined(with: .opacity))
                 }
             }
             .overlay(alignment: .bottomTrailing) {
@@ -508,9 +528,9 @@ private struct ModuleCard: View {
                     Image(systemName: "arrow.down.right")
                         .font(.system(size: 9, weight: .bold))
                         .foregroundStyle(.secondary)
-                        .frame(width: 24, height: 24)
+                        .frame(width: 20, height: 20)
                         .glassEffect(.regular, in: .circle)
-                        .padding(6)
+                        .padding(4)
                         .contentShape(Rectangle())
                         .gesture(DragGesture(minimumDistance: 1, coordinateSpace: .global)
                             .onChanged { onResize($0.translation, false) }
@@ -522,7 +542,13 @@ private struct ModuleCard: View {
         .scaleEffect(isActive && !Motion.reduceMotion ? 1.02 : 1)
         .shadow(color: .black.opacity(isActive ? 0.3 : 0.1), radius: isActive ? 24 : 8, y: isActive ? 14 : 3)
         .animation(Motion.snappy, value: isActive)
-        .onHover { h in withAnimation(Motion.snappy) { hovering = h } }
+        .onHover { h in
+            withAnimation(Motion.snappy) {
+                hovering = h
+                if !h { barExpanded = false }
+            }
+        }
+        .onChange(of: isActive) { if !$1 && !hovering { barExpanded = false } }
         .contextMenu {
             Button("Reload") { HomeWebCache.shared.reload(module.id) }
             Button("Zoom In") { setZoom(module.zoom + 0.1) }
