@@ -121,6 +121,7 @@ final class BrowserState {
     func start() {
         suspender.start()
         MiddleClickCloser.shared.install(browser: self)
+        LiveTextClickThrough.shared.install()
         installClickTracker()
         installNavigationButtons()
         ExtensionManager.shared.start(browser: self)
