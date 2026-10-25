@@ -9,32 +9,70 @@ struct HomeView: View {
     @State private var editing = false
     @State private var showAdd = false
 
+    static let barHeight: CGFloat = 54
+
     var body: some View {
-        ScrollView {
-            VStack(spacing: 22) {
-                header
-                HomeSearchBar(search: search)
-                if search.phase != .idle {
-                    SmartAnswerCard(search: search)
-                        .transition(BlurScaleTransition(scale: 0.96, blur: 8).combined(with: .move(edge: .top)))
+        GeometryReader { viewport in
+            let half = max(140, (viewport.size.height - Self.barHeight) / 2)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(spacing: 0) {
+                        // Upper half: clock, resting just above the bar.
+                        VStack(spacing: 0) {
+                            Spacer(minLength: 16)
+                            header
+                            Spacer().frame(height: 26)
+                        }
+                        .frame(height: half)
+
+                        // The search bar sits exactly in the vertical centre of the page.
+                        HomeSearchBar(search: search)
+
+                        // Lower half: the answer unfolds below the bar; modules peek in at the bottom.
+                        VStack(spacing: 18) {
+                            if search.phase != .idle {
+                                SmartAnswerCard(search: search)
+                                    .transition(BlurScaleTransition(scale: 0.96, blur: 8).combined(with: .move(edge: .top)))
+                            }
+                            Spacer(minLength: 0)
+                            if !store.modules.isEmpty {
+                                Button {
+                                    withAnimation(Motion.smooth) { proxy.scrollTo("modules", anchor: .top) }
+                                } label: {
+                                    Label("Modules", systemImage: "chevron.compact.down")
+                                        .labelStyle(.titleAndIcon)
+                                        .font(.system(size: 11, weight: .semibold))
+                                        .foregroundStyle(.secondary)
+                                }
+                                .buttonStyle(SquishButtonStyle())
+                            }
+                        }
+                        .padding(.top, 18)
+                        .padding(.bottom, 12)
+                        .frame(minHeight: half, alignment: .top)
+
+                        VStack(spacing: 14) {
+                            HStack {
+                                Label("Modules", systemImage: "square.grid.2x2").font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                                Button { showAdd = true } label: { Label("Add", systemImage: "plus") }
+                                    .buttonStyle(.glass).controlSize(.small)
+                                    .popover(isPresented: $showAdd, arrowEdge: .bottom) { AddModuleView { showAdd = false } }
+                            }
+                            ModuleGrid(store: store)
+                        }
+                        .padding(.top, 20)
+                        .padding(.bottom, 40)
+                        .id("modules")
+                    }
+                    .padding(.horizontal, 28)
+                    .frame(maxWidth: 1400)
+                    .frame(maxWidth: .infinity)
                 }
-                HStack {
-                    Label("Modules", systemImage: "square.grid.2x2").font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Button { showAdd = true } label: { Label("Add", systemImage: "plus") }
-                        .buttonStyle(.glass).controlSize(.small)
-                        .popover(isPresented: $showAdd, arrowEdge: .bottom) { AddModuleView { showAdd = false } }
-                }
-                ModuleGrid(store: store)
+                .scrollIndicators(.automatic)
             }
-            .padding(.horizontal, 28)
-            .padding(.top, 36)
-            .padding(.bottom, 40)
-            .frame(maxWidth: 1400)
-            .frame(maxWidth: .infinity)
         }
-        .scrollIndicators(.automatic)
         .animation(Motion.smooth, value: search.phase)
         .onAppear { HomeWebCache.shared.homeAppeared() }
         .onDisappear { HomeWebCache.shared.homeDisappeared(); search.cancel() }
@@ -92,7 +130,7 @@ private struct HomeSearchBar: View {
                 }
             }
             .padding(.horizontal, 18)
-            .frame(height: 54)
+            .frame(height: HomeView.barHeight)
         }
         .frame(maxWidth: 720)
         .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 18, style: .continuous))
