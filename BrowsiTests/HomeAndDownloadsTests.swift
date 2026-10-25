@@ -257,3 +257,26 @@ struct SharedSuggestionTests {
         #expect(url.first?.id == "nav")
     }
 }
+
+@MainActor
+struct HeroLayoutTests {
+    @Test func searchBlockMovesAndModulesMakeRoom() throws {
+        let file = FileManager.default.temporaryDirectory.appending(path: "home-\(UUID()).json")
+        defer {
+            try? FileManager.default.removeItem(at: file)
+            try? FileManager.default.removeItem(at: file.deletingLastPathComponent().appending(path: "home-hero.json"))
+        }
+        let store = HomeStore(fileURL: file)
+        let m = store.add(url: URL(string: "https://example.com")!, title: "M", w: 4, h: 3)
+        store.commit(m.id, at: GridRect(col: 0, row: 0, w: 4, h: 3))
+        store.commitHero(GridRect(col: 0, row: 0, w: 6, h: 4))
+        #expect(store.heroRect == GridRect(col: 0, row: 0, w: 6, h: 4))
+        let moved = try #require(store.modules.first { $0.id == m.id }?.rect)
+        #expect(!moved.intersects(store.heroRect), "module pushed out of the search block")
+        #expect(HomeStore(fileURL: file).heroRect == GridRect(col: 0, row: 0, w: 6, h: 4), "persisted")
+        // Too small → clamped to the minimum.
+        store.commitHero(GridRect(col: 11, row: 0, w: 1, h: 1))
+        #expect(store.heroRect.w >= HomeStore.heroMin.w && store.heroRect.h >= HomeStore.heroMin.h)
+        #expect(store.heroRect.col + store.heroRect.w <= GridLayout.columns)
+    }
+}

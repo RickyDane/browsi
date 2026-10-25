@@ -33,9 +33,13 @@ final class LinkBridge: NSObject, WKScriptMessageHandler {
               let webView = message.webView else { return }
         let source = browser.allTabs.first { $0.controller?.webView === webView }
             ?? (browser.peek?.tab.controller?.webView === webView ? browser.peek?.tab : nil)
-        guard let source else { return }
         let shift = body["shift"] as? Bool ?? false
         let background = Preferences.shared.commandClickOpensInBackground != shift
+        guard let source else {
+            // Middle-click inside a home module.
+            if HomeWebCache.shared.isModuleWebView(webView) { browser.openFromHome(url, background: background) }
+            return
+        }
         var request = URLRequest(url: url)
         if let referer = webView.url?.absoluteString { request.setValue(referer, forHTTPHeaderField: "Referer") }
         browser.openInNewTab(request, from: source, background: background)

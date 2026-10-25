@@ -19,7 +19,7 @@ final class HomeWebCache: NSObject {
         v.uiDelegate = self
         v.customUserAgent = UserAgent.current
         v.pageZoom = module.zoom
-        v.allowsBackForwardNavigationGestures = false
+        v.allowsBackForwardNavigationGestures = true
         v.underPageBackgroundColor = .clear
         v.load(URLRequest(url: module.url))
         views[module.id] = v
@@ -49,23 +49,37 @@ final class HomeWebCache: NSObject {
 }
 
 extension HomeWebCache: WKNavigationDelegate, WKUIDelegate {
-    /// Clicking a link inside a module opens it as a real tab instead of navigating the module.
+    /// Links navigate inside the module. Only ⌘-click / middle-click open a browser tab.
     func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
                  preferences: WKWebpagePreferences) async -> (WKNavigationActionPolicy, WKWebpagePreferences) {
-        if action.navigationType == .linkActivated, action.targetFrame?.isMainFrame != false,
-           let url = action.request.url, ["http", "https"].contains(url.scheme ?? "") {
-            let background = action.modifierFlags.contains(.command) || action.buttonNumber == 2
-            browser?.openFromHome(url, background: background)
+        if action.navigationType == .linkActivated, let url = action.request.url,
+           ["http", "https"].contains(url.scheme ?? ""),
+           action.modifierFlags.contains(.command) || action.buttonNumber == 2 {
+            openTab(url, flags: action.modifierFlags)
             return (.cancel, preferences)
         }
         return (.allow, preferences)
     }
 
+    /// target=_blank / window.open: ⌘ → tab, otherwise load it in the module itself.
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
                  for action: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
-        if let url = action.request.url { browser?.openFromHome(url, background: false) }
+        guard let url = action.request.url else { return nil }
+        if action.modifierFlags.contains(.command) || action.buttonNumber == 2 {
+            openTab(url, flags: action.modifierFlags)
+        } else if action.navigationType == .linkActivated {
+            webView.load(action.request)
+        }
         return nil
     }
+
+    private func openTab(_ url: URL, flags: NSEvent.ModifierFlags) {
+        let background = Preferences.shared.commandClickOpensInBackground != flags.contains(.shift)
+        browser?.openFromHome(url, background: background)
+    }
+
+    func goBack(_ id: UUID) { views[id]?.goBack() }
+    func isModuleWebView(_ webView: WKWebView) -> Bool { views.values.contains { $0 === webView } }
 }
 
 /// Hosts a module's cached web view (re-parented like `WebViewHost`).

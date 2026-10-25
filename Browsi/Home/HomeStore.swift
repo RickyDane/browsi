@@ -15,8 +15,14 @@ struct HomeModule: Identifiable, Codable, Equatable {
 final class HomeStore {
     static let shared = HomeStore()
     private(set) var modules: [HomeModule] = []
-    /// Area reserved for the clock + search bar; modules flow around it.
-    @ObservationIgnored var locked: [GridRect] = []
+    /// The clock + search bar block. Movable/resizable like a module; modules flow around it.
+    var heroRect: GridRect = HomeStore.defaultHero
+    static let defaultHero = GridRect(col: 3, row: 3, w: 6, h: 4)
+    static let heroMin = (w: 4, h: 3)
+    var locked: [GridRect] { [heroRect] }
+    @ObservationIgnored private var heroURL: URL? {
+        fileURL.map { $0.deletingLastPathComponent().appending(path: "home-hero.json") }
+    }
     @ObservationIgnored private let fileURL: URL?
 
     static let presets: [(title: String, url: String, symbol: String)] = [
@@ -36,6 +42,10 @@ final class HomeStore {
         if let fileURL = self.fileURL, let data = try? Data(contentsOf: fileURL),
            let saved = try? JSONDecoder().decode([HomeModule].self, from: data) {
             modules = saved
+            if let heroURL, let data = try? Data(contentsOf: heroURL),
+               let hero = try? JSONDecoder().decode(GridRect.self, from: data) {
+                heroRect = Self.clampHero(hero)
+            }
         } else if self.fileURL != nil {
             modules = [
                 HomeModule(url: URL(string: "https://news.ycombinator.com")!, title: "Hacker News",
@@ -79,6 +89,25 @@ final class HomeStore {
         save()
     }
 
+    static func clampHero(_ r: GridRect) -> GridRect {
+        var r = GridLayout.clamp(r)
+        r.w = max(r.w, heroMin.w)
+        r.h = max(r.h, heroMin.h)
+        r.col = min(r.col, GridLayout.columns - r.w)
+        return r
+    }
+
+    /// Module positions if the hero were at `rect` (doesn't commit).
+    func previewHero(at rect: GridRect) -> [UUID: GridRect] {
+        GridLayout.resolve(modules.map { ($0.id, $0.rect) }, fixedID: nil, fixed: nil, locked: [rect])
+    }
+
+    func commitHero(_ rect: GridRect) {
+        heroRect = Self.clampHero(rect)
+        apply(layout())
+        save()
+    }
+
     func update(_ id: UUID, _ change: (inout HomeModule) -> Void) {
         guard let i = modules.firstIndex(where: { $0.id == id }) else { return }
         change(&modules[i])
@@ -92,5 +121,6 @@ final class HomeStore {
     private func save() {
         guard let fileURL, let data = try? JSONEncoder().encode(modules) else { return }
         try? data.write(to: fileURL, options: .atomic)
+        if let heroURL, let hero = try? JSONEncoder().encode(heroRect) { try? hero.write(to: heroURL, options: .atomic) }
     }
 }

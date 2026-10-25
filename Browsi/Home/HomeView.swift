@@ -12,22 +12,16 @@ struct HomeView: View {
 
     static let barHeight: CGFloat = 54
 
-    /// The fixed central block (clock + search bar) on the 12-column grid.
-    /// Wide windows: modules sit left, right, above and below it; narrow windows: above and below.
-    static func heroRect(colWidth: CGFloat) -> GridRect {
-        colWidth >= 70 ? GridRect(col: 3, row: 3, w: 6, h: 4) : GridRect(col: 0, row: 3, w: 12, h: 4)
-    }
-
     var body: some View {
         GeometryReader { viewport in
             let width = max(300, min(viewport.size.width - 56, 1400))
             let colWidth = HomeGridMetrics.colWidth(for: width)
-            let hero = Self.heroRect(colWidth: colWidth)
-            let heroFrame = HomeGridMetrics.frame(hero, colWidth)
-            // Scroll position 0 shows the search bar exactly in the vertical centre.
-            let topInset = max(16, viewport.size.height / 2 - heroFrame.midY)
+            // Fixed inset (from the default layout) so moving the search block doesn't shift the page;
+            // with the default layout the search bar sits exactly in the vertical centre.
+            let defaultFrame = HomeGridMetrics.frame(HomeStore.defaultHero, colWidth)
+            let topInset = max(16, viewport.size.height / 2 - defaultFrame.midY)
             ScrollView {
-                ModuleGrid(store: store, width: width, hero: hero) {
+                ModuleGrid(store: store, width: width) {
                     heroContent
                 }
                 .padding(.top, topInset)
@@ -384,33 +378,35 @@ private struct ShimmerLines: View {
 private struct ModuleGrid<Hero: View>: View {
     let store: HomeStore
     let width: CGFloat
-    let hero: GridRect
     @ViewBuilder let heroContent: () -> Hero
     static var rowHeight: CGFloat { HomeGridMetrics.rowHeight }
     static var gap: CGFloat { HomeGridMetrics.gap }
 
     /// In-flight drag/resize: the module, its live rect in points, and the snapped target.
     @State private var active: (id: UUID, frame: CGRect, target: GridRect)?
+    /// In-flight drag/resize of the search block.
+    @State private var heroActive: (frame: CGRect, target: GridRect)?
     @State private var preview: [UUID: GridRect] = [:]
 
     private var colWidth: CGFloat { HomeGridMetrics.colWidth(for: width) }
     private func frame(_ r: GridRect, _ colWidth: CGFloat) -> CGRect { HomeGridMetrics.frame(r, colWidth) }
 
     var body: some View {
-        let _ = (store.locked = [hero])
         let layout = store.layout()
-        let heroFrame = frame(hero, colWidth)
+        let hero = store.heroRect
+        let heroFrame = heroActive?.frame ?? frame(hero, colWidth)
+        let landing = active?.target ?? heroActive?.target
         ZStack(alignment: .topLeading) {
-            if let active {
+            if let landing {
                 // Snapped landing spot.
-                let f = frame(active.target, colWidth)
+                let f = frame(landing, colWidth)
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(.primary.opacity(0.08))
                     .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [6, 5])).foregroundStyle(.secondary))
                     .frame(width: f.width, height: f.height)
                     .offset(x: f.minX, y: f.minY)
-                    .animation(Motion.snappy, value: active.target)
+                    .animation(Motion.snappy, value: landing)
             }
             ForEach(store.modules) { module in
                 let isActive = active?.id == module.id
@@ -431,20 +427,63 @@ private struct ModuleGrid<Hero: View>: View {
                     .animation(isActive ? nil : Motion.snappy, value: rect)
                     .transition(.scale(scale: 0.85).combined(with: .opacity))
             }
-            heroContent()
+            HeroBlock(isActive: heroActive != nil,
+                      onMove: { t, ended in dragHero(translation: t, ended: ended, resize: false) },
+                      onResize: { t, ended in dragHero(translation: t, ended: ended, resize: true) },
+                      content: heroContent)
                 .frame(width: heroFrame.width, height: heroFrame.height)
                 .offset(x: heroFrame.minX, y: heroFrame.minY)
-                .zIndex(5)
+                .zIndex(heroActive != nil ? 10 : 5)
+                .animation(heroActive != nil ? nil : Motion.snappy, value: heroFrame)
         }
         .frame(width: width, height: CGFloat(displayRows(layout)) * (Self.rowHeight + Self.gap), alignment: .topLeading)
         .animation(Motion.snappy, value: store.modules.map(\.id))
-        .animation(Motion.snappy, value: hero)
     }
 
     private func displayRows(_ layout: [UUID: GridRect]) -> Int {
-        let all = store.modules.map { preview[$0.id] ?? layout[$0.id] ?? $0.rect } + [hero]
-            + (active.map { [$0.target] } ?? [])
-        return (all.map { $0.row + $0.h }.max() ?? 0) + (active == nil ? 0 : 2)
+        let all = store.modules.map { preview[$0.id] ?? layout[$0.id] ?? $0.rect } + [store.heroRect]
+            + (active.map { [$0.target] } ?? []) + (heroActive.map { [$0.target] } ?? [])
+        let dragging = active != nil || heroActive != nil
+        return (all.map { $0.row + $0.h }.max() ?? 0) + (dragging ? 2 : 0)
+    }
+
+    /// Live frame + snapped grid target for a drag or resize starting at `current`.
+    private func track(_ current: GridRect, translation: CGSize, resize: Bool, minW: Int, minH: Int) -> (CGRect, GridRect) {
+        let start = frame(current, colWidth)
+        let stepX = colWidth + Self.gap, stepY = Self.rowHeight + Self.gap
+        var live = start
+        var target = current
+        if resize {
+            live.size.width = max(start.width + translation.width, CGFloat(minW) * stepX - Self.gap)
+            live.size.height = max(start.height + translation.height, CGFloat(minH) * stepY - Self.gap)
+            target.w = Int(((live.width + Self.gap) / stepX).rounded())
+            target.h = Int(((live.height + Self.gap) / stepY).rounded())
+        } else {
+            live.origin.x += translation.width
+            live.origin.y += translation.height
+            target.col = Int((live.minX / stepX).rounded())
+            target.row = Int((live.minY / stepY).rounded())
+        }
+        return (live, target)
+    }
+
+    private func dragHero(translation: CGSize, ended: Bool, resize: Bool) {
+        let (live, raw) = track(store.heroRect, translation: translation, resize: resize,
+                                minW: HomeStore.heroMin.w, minH: HomeStore.heroMin.h)
+        let target = HomeStore.clampHero(raw)
+        if ended {
+            withAnimation(Motion.bouncy) {
+                store.commitHero(target)
+                heroActive = nil
+                preview = [:]
+            }
+        } else {
+            if heroActive?.target != target {
+                let p = store.previewHero(at: target)
+                withAnimation(Motion.snappy) { preview = p }
+            }
+            heroActive = (live, target)
+        }
     }
 
     private func drag(_ module: HomeModule, from current: GridRect, translation: CGSize, ended: Bool, resize: Bool) {
@@ -565,6 +604,7 @@ private struct ModuleCard: View {
             Image(systemName: "line.3.horizontal").font(.system(size: 10, weight: .bold)).foregroundStyle(.secondary)
             Text(module.title).font(.system(size: 12, weight: .semibold)).lineLimit(1)
             Spacer(minLength: 4)
+            button("chevron.left", "Back") { HomeWebCache.shared.goBack(module.id) }
             button("arrow.clockwise", "Reload") { HomeWebCache.shared.reload(module.id) }
             button("arrow.up.forward.square", "Open as Tab") {
                 browser.openFromHome(HomeWebCache.shared.currentURL(module.id) ?? module.url)
@@ -662,5 +702,67 @@ enum HomeGridMetrics {
         CGRect(x: CGFloat(r.col) * (colWidth + gap), y: CGFloat(r.row) * (rowHeight + gap),
                width: CGFloat(r.w) * colWidth + CGFloat(r.w - 1) * gap,
                height: CGFloat(r.h) * rowHeight + CGFloat(r.h - 1) * gap)
+    }
+}
+
+/// The clock + search bar block on the grid: a grab pill (top) and resize handle (bottom right)
+/// appear on hover so it can be placed and sized like a module.
+private struct HeroBlock<Content: View>: View {
+    let isActive: Bool
+    let onMove: (CGSize, Bool) -> Void
+    let onResize: (CGSize, Bool) -> Void
+    @ViewBuilder let content: () -> Content
+    @State private var hovering = false
+
+    private var showsChrome: Bool { hovering || isActive }
+
+    var body: some View {
+        content()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background {
+                // Hover target for the empty part of the block; clicking it just unfocuses the bar.
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(.primary.opacity(isActive ? 0.05 : 0.001))
+                    .onTapGesture { NSApp.keyWindow?.makeFirstResponder(nil) }
+            }
+            .overlay(alignment: .top) {
+                if showsChrome {
+                    HStack(spacing: 6) {
+                        Image(systemName: "line.3.horizontal").font(.system(size: 9, weight: .bold))
+                        Text("Move").font(.system(size: 10.5, weight: .semibold))
+                    }
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 10).frame(height: 22)
+                    .glassEffect(.regular.interactive(), in: .capsule)
+                    .padding(6)
+                    .contentShape(Rectangle())
+                    .gesture(DragGesture(minimumDistance: 3, coordinateSpace: .global)
+                        .onChanged { onMove($0.translation, false) }
+                        .onEnded { onMove($0.translation, true) })
+                    .onHover { if $0 { NSCursor.openHand.push() } else { NSCursor.pop() } }
+                    .help("Drag to move the search bar")
+                    .transition(.scale(scale: 0.6, anchor: .top).combined(with: .opacity))
+                }
+            }
+            .overlay(alignment: .bottomTrailing) {
+                if showsChrome {
+                    Image(systemName: "arrow.down.right")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 20, height: 20)
+                        .glassEffect(.regular, in: .circle)
+                        .padding(4)
+                        .contentShape(Rectangle())
+                        .gesture(DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                            .onChanged { onResize($0.translation, false) }
+                            .onEnded { onResize($0.translation, true) })
+                        .onHover { if $0 { NSCursor.frameResize(position: .bottomRight, directions: .all).push() } else { NSCursor.pop() } }
+                        .help("Drag to resize")
+                        .transition(.scale(scale: 0.6).combined(with: .opacity))
+                }
+            }
+            .scaleEffect(isActive && !Motion.reduceMotion ? 1.02 : 1)
+            .animation(Motion.snappy, value: isActive)
+            .onHover { h in withAnimation(Motion.snappy) { hovering = h } }
     }
 }
