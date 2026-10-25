@@ -147,6 +147,16 @@ private struct ContentCard: View {
                 if let impact = browser.impact {
                     ImpactOverlay(impact: impact).id(impact.id)
                 }
+                if let storeID = tab.url.flatMap({ ExtensionPackage.storeID(from: $0.absoluteString) }) {
+                    VStack {
+                        Spacer()
+                        StoreInstallBanner(storeID: storeID,
+                                           title: tab.title.replacingOccurrences(of: " - Chrome Web Store", with: ""))
+                            .padding(.bottom, 22)
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .id(storeID)
+                }
             } else {
                 // Home page: frosted card so the space's gradient glows through.
                 Rectangle().fill(.ultraThinMaterial)

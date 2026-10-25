@@ -34,6 +34,16 @@ nonisolated enum ExtensionPackage {
         return url.pathComponents.last { $0.wholeMatch(of: /[a-p]{32}/) != nil }
     }
 
+    static let storeHome = URL(string: "https://chromewebstore.google.com/category/extensions")!
+
+    static func storeSearchURL(_ query: String) -> URL {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty, let encoded = q.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed.subtracting(["/"])) else {
+            return storeHome
+        }
+        return URL(string: "https://chromewebstore.google.com/search/\(encoded)")!
+    }
+
     static func downloadURL(storeID: String) -> URL {
         var c = URLComponents(string: "https://clients2.google.com/service/update2/crx")!
         c.queryItems = [
@@ -260,6 +270,16 @@ final class ExtensionManager: NSObject {
         records.removeAll { $0.id == id }
         loadErrors[id] = nil
         save()
+    }
+
+    /// Opens the Chrome Web Store (optionally a search) in a browser tab and brings the browser to front.
+    func openStore(search query: String = "") {
+        guard let browser else { return }
+        browser.newTab(url: ExtensionPackage.storeSearchURL(query))
+        if let settings = NSApp.keyWindow, settings.title.contains("Extensions") || settings.identifier?.rawValue.contains("Settings") == true {
+            settings.performClose(nil)
+        }
+        NSApp.windows.first { $0.isVisible && $0.canBecomeMain && !($0 is NSPanel) && $0 !== NSApp.keyWindow }?.makeKeyAndOrderFront(nil)
     }
 
     func openOptions(_ id: UUID) {

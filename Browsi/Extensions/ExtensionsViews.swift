@@ -69,9 +69,31 @@ struct ExtensionsPane: View {
     @State private var link = ""
     @State private var error: String?
     @State private var busy: String?
+    @State private var storeQuery = ""
 
     var body: some View {
         Form {
+            Section {
+                HStack {
+                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                    TextField("Search the Chrome Web Store", text: $storeQuery)
+                        .textFieldStyle(.plain)
+                        .onSubmit { manager.openStore(search: storeQuery) }
+                    Button("Search") { manager.openStore(search: storeQuery) }
+                        .disabled(storeQuery.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+                Button {
+                    manager.openStore()
+                } label: {
+                    Label("Open Chrome Web Store", systemImage: "bag.fill")
+                }
+            } header: {
+                Text("Extension Store")
+            } footer: {
+                Text("Results open in a new tab. On an extension’s page, click “Add to Browsi”.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
             Section {
                 HStack {
                     TextField("Chrome Web Store link or extension ID", text: $link)
@@ -190,6 +212,54 @@ private struct InstalledRow: View {
             Button(role: .destructive) { manager.remove(record.id) } label: { Image(systemName: "trash") }
                 .buttonStyle(.borderless)
                 .help("Remove")
+        }
+    }
+}
+
+/// Floating "Add to Browsi" banner on Chrome Web Store extension pages.
+struct StoreInstallBanner: View {
+    @Environment(BrowserState.self) private var browser
+    let storeID: String
+    let title: String
+    @State private var manager = ExtensionManager.shared
+    @State private var installing = false
+
+    var body: some View {
+        let installed = manager.records.contains { $0.storeID == storeID }
+        HStack(spacing: 12) {
+            Image(systemName: "puzzlepiece.extension.fill")
+                .font(.system(size: 18)).foregroundStyle(browser.selectedSpace.color.gradient)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(installed ? "Installed in Browsi" : "Add this extension to Browsi")
+                    .font(.system(size: 13, weight: .semibold))
+                Text(title).font(.system(size: 11.5)).foregroundStyle(.secondary).lineLimit(1)
+            }
+            Spacer(minLength: 12)
+            if installed {
+                Image(systemName: "checkmark.circle.fill").foregroundStyle(.green).font(.system(size: 18))
+                    .transition(.scale.combined(with: .opacity))
+            } else if installing {
+                ProgressView().controlSize(.small)
+            } else {
+                Button("Add to Browsi") { install() }
+                    .buttonStyle(.glassProminent)
+            }
+        }
+        .padding(.horizontal, 16).padding(.vertical, 10)
+        .frame(maxWidth: 460)
+        .glassEffect(.regular, in: .rect(cornerRadius: 18, style: .continuous))
+        .shadow(color: .black.opacity(0.2), radius: 20, y: 8)
+        .animation(Motion.bouncy, value: installed)
+        .animation(Motion.snappy, value: installing)
+    }
+
+    private func install() {
+        installing = true
+        Task {
+            defer { installing = false }
+            do { try await manager.installFromStore(storeID) }
+            catch let e as ExtensionInstallError where e == .cancelled {}
+            catch { browser.showToast("exclamationmark.triangle.fill", error.localizedDescription) }
         }
     }
 }

@@ -106,3 +106,11 @@ struct ExtensionRuntimeTests {
         #expect(result == "blocked", "uBlock Origin Lite blocks a Google ad script")
     }
 }
+
+struct StoreLinkTests {
+    @Test func storeSearchURLs() {
+        #expect(ExtensionPackage.storeSearchURL("dark mode").absoluteString == "https://chromewebstore.google.com/search/dark%20mode")
+        #expect(ExtensionPackage.storeSearchURL("a/b").absoluteString == "https://chromewebstore.google.com/search/a%2Fb")
+        #expect(ExtensionPackage.storeSearchURL("  ") == ExtensionPackage.storeHome)
+    }
+}

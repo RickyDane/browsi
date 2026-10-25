@@ -1,3 +1,5 @@
+<p align="center"><img src="Design/logo-1024.png" width="160" alt="Browsi logo"></p>
+
 # Browsi
 
 A native macOS browser built with SwiftUI and WebKit: vertical tabs, Spaces, Liquid Glass, spring animations, and passwords kept in the macOS Keychain.
