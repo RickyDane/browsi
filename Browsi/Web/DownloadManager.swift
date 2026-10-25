@@ -23,6 +23,8 @@ final class DownloadItem: Identifiable {
     var isRenaming = false
     /// Name before the last smart rename (enables undo).
     var renamedFrom: String?
+    /// Drives the old → new name morph in the queue.
+    var renameMorph: RenameMorph?
 
     @ObservationIgnored weak var download: WKDownload?
     @ObservationIgnored var progressObservation: NSKeyValueObservation?
@@ -220,10 +222,16 @@ final class DownloadManager: NSObject, WKDownloadDelegate {
             debugLog("rename failed: \(error)")
             return false
         }
+        let morph = RenameMorph(from: url.lastPathComponent)
         withAnimation(Motion.snappy) {
             item.renamedFrom = url.lastPathComponent
             item.fileURL = target
             item.fileName = target.lastPathComponent
+            item.renameMorph = morph
+        }
+        Task { [weak item] in
+            try? await Task.sleep(for: .seconds(RenameMorph.duration + 0.1))
+            if item?.renameMorph?.id == morph.id { item?.renameMorph = nil }
         }
         scheduleSave()
         return true
@@ -323,4 +331,12 @@ final class DownloadManager: NSObject, WKDownloadDelegate {
             if let data = try? JSONEncoder().encode(Array(records)) { try? data.write(to: Self.storeURL, options: .atomic) }
         }
     }
+}
+
+/// An in-flight file-name transition (old name → current name).
+struct RenameMorph: Equatable {
+    static let duration: TimeInterval = 1.1
+    let id = UUID()
+    let from: String
+    let start = Date()
 }

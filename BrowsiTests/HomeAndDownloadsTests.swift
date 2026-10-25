@@ -232,3 +232,15 @@ struct PathEncodingRegressionTests {
         #expect(DownloadManager.uniqueURL(in: dir, fileName: "My Report.pdf").lastPathComponent == "My Report 2.pdf")
     }
 }
+
+struct RenameMorphTests {
+    private func plain(_ s: AttributedString) -> String { String(s.characters) }
+
+    @Test func morphStartsOldEndsNew() {
+        let old = "winfer_0.1.105-75_x64.dmg", new = "Winfer 0.1.105.dmg"
+        #expect(plain(RenameMorphText.compose(from: old, to: new, progress: 0, frame: 0)) == old)
+        #expect(plain(RenameMorphText.compose(from: old, to: new, progress: 1, frame: 7)) == new)
+        let mid = plain(RenameMorphText.compose(from: old, to: new, progress: 0.4, frame: 3))
+        #expect(mid != old && mid != new)
+    }
+}

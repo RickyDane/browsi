@@ -124,11 +124,17 @@ private struct DownloadRow: View {
                         .onSubmit { manager.rename(item, to: draftName); editing = false }
                         .onExitCommand { editing = false }
                 } else {
-                    Text(item.fileName)
-                        .font(.system(size: 12.5, weight: .medium))
-                        .lineLimit(1).truncationMode(.middle)
-                        .contentTransition(.interpolate)
-                        .overlay { if item.isRenaming { Shimmer() } }
+                    Group {
+                        if let morph = item.renameMorph {
+                            RenameMorphText(from: morph.from, to: item.fileName, start: morph.start)
+                        } else if item.isRenaming {
+                            ShimmerText(text: item.fileName)
+                        } else {
+                            Text(item.fileName)
+                        }
+                    }
+                    .font(.system(size: 12.5, weight: .medium))
+                    .lineLimit(1).truncationMode(.middle)
                 }
                 detail
             }
@@ -231,20 +237,81 @@ private struct DownloadRow: View {
     }
 }
 
-/// Sweeping highlight over a label while the model is working.
-private struct Shimmer: View {
-    @State private var phase: CGFloat = -1
+/// "Thinking" effect drawn *in the glyphs only*: a purple/cyan sheen sweeps through the letters.
+private struct ShimmerText: View {
+    let text: String
+
     var body: some View {
-        GeometryReader { geo in
-            LinearGradient(colors: [.clear, .purple.opacity(0.45), .cyan.opacity(0.45), .clear],
-                           startPoint: .leading, endPoint: .trailing)
-                .frame(width: geo.size.width * 0.6)
-                .offset(x: phase * geo.size.width)
-                .blendMode(.plusLighter)
+        TimelineView(.animation(paused: Motion.reduceMotion)) { ctx in
+            let t = ctx.date.timeIntervalSinceReferenceDate
+            let phase = CGFloat((t / 1.3).truncatingRemainder(dividingBy: 1)) * 2.4 - 0.7   // -0.7 … 1.7
+            Text(text)
+                .foregroundStyle(
+                    LinearGradient(stops: [
+                        .init(color: .secondary, location: 0),
+                        .init(color: .purple, location: 0.35),
+                        .init(color: .cyan, location: 0.5),
+                        .init(color: .purple, location: 0.65),
+                        .init(color: .secondary, location: 1),
+                    ], startPoint: UnitPoint(x: phase - 0.35, y: 0.5), endPoint: UnitPoint(x: phase + 0.35, y: 0.5))
+                )
         }
-        .clipped()
-        .allowsHitTesting(false)
-        .onAppear { withAnimation(.linear(duration: 1.1).repeatForever(autoreverses: false)) { phase = 1.2 } }
+    }
+}
+
+/// Old name → new name: characters scramble and resolve left to right in a travelling
+/// purple/cyan wave, then the finished name settles to the normal colour.
+struct RenameMorphText: View {
+    let from: String
+    let to: String
+    let start: Date
+
+    static let glyphs = Array("ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz0123456789")
+
+    var body: some View {
+        TimelineView(.animation(paused: Motion.reduceMotion)) { ctx in
+            let p = Motion.reduceMotion ? 1 : min(1, ctx.date.timeIntervalSince(start) / RenameMorph.duration)
+            let frame = Int(ctx.date.timeIntervalSinceReferenceDate * 24)
+            Text(Self.compose(from: from, to: to, progress: p, frame: frame))
+                .foregroundStyle(style(p))
+        }
+    }
+
+    /// Wave front travels across the name; glyphs behind it are final, glyphs at it scramble.
+    static func compose(from: String, to: String, progress p: Double, frame: Int) -> AttributedString {
+        let a = Array(from), b = Array(to)
+        let n = max(a.count, b.count, 1)
+        let front = p * 1.35 * Double(n)          // resolves fully by ~74 % of the duration
+        let band = max(3.0, Double(n) * 0.18)     // width of the scrambling zone
+        var out = AttributedString()
+        for i in 0..<n {
+            let d = front - Double(i)
+            var ch: Character?
+            var scrambling = false
+            if d >= band {
+                ch = i < b.count ? b[i] : nil
+            } else if d > 0 {
+                scrambling = true
+                let src = i < b.count ? b[i] : (i < a.count ? a[i] : " ")
+                ch = src == " " || src == "." ? src : glyphs[abs((i &* 31) &+ frame &* 7) % glyphs.count]
+                if i >= b.count && d > band * 0.6 { ch = nil }   // trailing old chars collapse away
+            } else {
+                ch = i < a.count ? a[i] : nil
+            }
+            guard let ch else { continue }
+            var piece = AttributedString(String(ch))
+            if scrambling {
+                piece.foregroundColor = (i + frame) % 2 == 0 ? .purple : .cyan
+            }
+            out += piece
+        }
+        return out
+    }
+
+    private func style(_ p: Double) -> AnyShapeStyle {
+        // Resolved glyphs glow violet, then fade to the normal label colour at the end.
+        p < 0.75 ? AnyShapeStyle(Color.purple.opacity(0.9))
+                 : AnyShapeStyle(Color.primary.opacity(0.55 + 0.45 * (p - 0.75) / 0.25))
     }
 }
 
