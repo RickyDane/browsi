@@ -6,6 +6,8 @@ A native macOS browser built with SwiftUI and WebKit: vertical tabs, Spaces, Liq
 
 > Requires **macOS 26+** (Liquid Glass APIs) and **Xcode 26+**.
 
+<img width="1656" height="975" alt="image" src="https://github.com/user-attachments/assets/cd346ca7-e734-4457-8bda-2686c080dbfd" />
+
 ## Features
 
 - **Space theme**: a starry night sky behind the whole browser (tinted by each space), and on the home page with random shooting stars. Toggle in Settings › Appearance.
