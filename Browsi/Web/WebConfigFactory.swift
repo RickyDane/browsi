@@ -3,6 +3,7 @@ import WebKit
 enum WebConfigFactory {
     static let passwordBridge = PasswordBridge()
     private static let autofillScript = PasswordBridge.userScript()
+    private static let formFillScript = FormFillBridge.userScript()
 
     /// Each tab gets its own user content controller so blocking can be toggled per tab.
     static func make() -> WKWebViewConfiguration {
@@ -28,6 +29,8 @@ enum WebConfigFactory {
         let ucc = WKUserContentController()
         if let autofillScript { ucc.addUserScript(autofillScript) }
         ucc.addScriptMessageHandler(passwordBridge, contentWorld: .defaultClient, name: PasswordBridge.handlerName)
+        if let formFillScript { ucc.addUserScript(formFillScript) }
+        ucc.addScriptMessageHandler(FormFillBridge.shared, contentWorld: .defaultClient, name: FormFillBridge.handlerName)
         ucc.addUserScript(LinkBridge.script)
         if PasskeyBridge.isActive, let script = PasskeyBridge.script {
             ucc.addUserScript(script)

@@ -21,6 +21,7 @@ struct BrowsiApp: App {
             SettingsView()
                 .environment(browser)
         }
+        .windowToolbarStyle(.unifiedCompact)
         .windowResizability(.contentSize)
     }
 }

@@ -37,6 +37,7 @@ MainWindowView
 | `App/AppUpdater.swift` | Sparkle `SPUStandardUpdaterController` wrapper (`@Observable`), feed = appcast on the latest GitHub release; menu item in `AppCommands`, toggles in Settings › General. Not started under tests. |
 | `Web/PageAssistant.swift` | Page summary + Q&A: reads the page's text (isolated content world), splits it into numbered passages (`PageText`, pure), picks passages within the model's context budget (question-matching ones first), streams answers; one `PageAssistant` per tab in `BrowserState`. UI in `UI/PageAssistantPanel.swift`. |
 | `Web/FindInPage.swift`, `UI/FindBar.swift` | ⌘F find (`WKWebView.find` + a match count from the page text) and ⌘⇧F ask mode: page passages → `@Generable FindAnswer` (answer + passage numbers) → glow highlight via `PageScripts.highlight`. `PageFind` (pure) has keyword fallback and validation. One `FindInPage` in `BrowserState`. |
+| `Web/FormFill/`, `Resources/formfill.js` | Smart form fill: the script (isolated world) spots address/contact forms and shows a "My Card" dropdown; `FormFillBridge` loads the card (`MeCard`, Contacts), classifies fields with `FormFieldClassifier` (pure: autocomplete, then multilingual keywords) and asks `FormFieldModel` (`@Generable`) about the rest; `FormFillPlanner` (pure) adapts to the layout (separate house number, "Vorname"/"Name"). HTTPS only, user-initiated. |
 | `Web/PageTranslator.swift` | Per-tab translation: language detection (`NLLanguageRecognizer` + `lang`), text-node collection/apply/restore in the isolated world, batches through a `TranslationSession` handed out by the window's `.translationTask(browser.translationConfig)`. |
 | `Web/PageActions.swift`, `UI/PageActionSheet.swift` | ⌘K page actions: `EventDraft` → `ICS` (.ics opened in Calendar), `<table>` extraction or `TableDraft` → `CSV`, `ComparisonDraft` for several tabs. Pure `ICS`/`CSV`/`PageCompare` are unit tested. |
 | `Web/PageWatcher.swift`, `UI/Settings/WatchedPagesPane.swift` | Watched pages (`watches.json`): 60 s scheduler, `HeadlessPage` (off-screen WKWebView, default data store), `PageDiff` line diff, `ChangeReport` significance check, `UNUserNotificationCenter` notifications that open the page. |
@@ -97,6 +98,8 @@ MainWindowView
 **Done:** everything listed under Features in the README; unit tests for the parser, palette ranking, keychain, blocker rules and suspension logic.
 
 **Notes:**
+- Settings › Appearance offers 21 app icons in three switchable collections (Space, Exploration, Galaxy), with a current-icon summary, default reset and compact four-column grid. Collection 04 remains concept artwork only. Pulsar is the bundled icon and default preference; saved alternate choices remain unchanged and apply to the running app's Dock icon.
+- The default Dock icon is also applied explicitly from its image asset, avoiding stale macOS bundle-icon caches after updates.
 - Tab switches are deliberately un-animated: one persistent `WebViewHost` swaps web views, and `.transaction { $0.animation = nil }` keeps springs from leaking in.
 - The traffic lights fade out while the sidebar is collapsed and return when it is shown or peeked.
 - Many web settings (JS, autoplay, pop-ups, HTTPS upgrade, fraud warnings, min font, zoom, inspector) apply to newly created tabs.

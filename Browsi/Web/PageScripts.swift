@@ -61,7 +61,13 @@ enum PageScripts {
         const old = document.getElementById('__browsi_glow'); if (old) old.remove();
         window.getSelection().removeAllRanges();
         """
-        Task { _ = try? await webView.callAsyncJavaScript(js, contentWorld: .defaultClient) }
+        Task {
+            _ = try? await webView.callAsyncJavaScript(js, contentWorld: .defaultClient)
+            // `WKWebView.find` leaves WebKit's active-match marker on the last hit, which clearing the
+            // DOM selection doesn't remove. A find that can't match makes WebKit hide its find UI
+            // (markers + selection), so search for a string that never occurs on a page.
+            _ = try? await webView.find("\u{1}browsi-clear-\(UUID().uuidString)", configuration: WKFindConfiguration())
+        }
     }
 
     /// Case-insensitive number of occurrences of `query` in the page's visible text.

@@ -274,32 +274,85 @@ private struct AppearancePane: View {
 
 private struct AppIconPicker: View {
     @Binding var selection: AppIconChoice
+    @State private var collection: AppIconCollection
+
+    init(selection: Binding<AppIconChoice>) {
+        _selection = selection
+        _collection = State(initialValue: selection.wrappedValue.collection)
+    }
 
     var body: some View {
-        HStack(spacing: 14) {
-            ForEach(AppIconChoice.allCases) { icon in
-                let selected = icon == selection
-                Button { withAnimation(Motion.snappy) { selection = icon } } label: {
-                    VStack(spacing: 6) {
-                        Group {
-                            if let image = icon.image { Image(nsImage: image).resizable() } else { Color.secondary }
-                        }
-                        .frame(width: 64, height: 64)
-                        .padding(3)
-                        .background(RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .strokeBorder(Color.accentColor, lineWidth: selected ? 2.5 : 0))
-                        Text(icon.name).font(.caption)
-                            .foregroundStyle(selected ? .primary : .secondary)
-                            .lineLimit(1).fixedSize()
-                    }
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 12) {
+                iconImage(selection)
+                    .frame(width: 48, height: 48)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(selection.name).font(.headline)
+                    Text("Current Dock icon").font(.caption).foregroundStyle(.secondary)
                 }
-                .buttonStyle(SquishButtonStyle(hoverBackground: false))
-                .accessibilityLabel(icon.name)
-                .accessibilityAddTraits(selected ? .isSelected : [])
+                Spacer()
+                Button("Use Default") {
+                    withAnimation(Motion.snappy) { selection = .defaultChoice }
+                }
+                .controlSize(.small)
+                .disabled(selection == .defaultChoice)
+                .help("Use Pulsar, Browsi’s default icon")
             }
+
+            Divider()
+
+            Picker("Icon collection", selection: $collection) {
+                ForEach(AppIconCollection.allCases) { group in
+                    Text(group.name).tag(group)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
+                ForEach(collection.icons) { icon in
+                    let selected = icon == selection
+                    Button { withAnimation(Motion.snappy) { selection = icon } } label: {
+                        VStack(spacing: 4) {
+                            iconImage(icon).frame(width: 52, height: 52)
+                            Text(icon.name).font(.caption)
+                                .foregroundStyle(selected ? .primary : .secondary)
+                                .lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(.primary.opacity(selected ? 0.05 : 0), in: .rect(cornerRadius: 10))
+                        .overlay(alignment: .topTrailing) {
+                            if selected {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(Color.accentColor)
+                                    .padding(6)
+                            }
+                        }
+                        .contentShape(.rect)
+                    }
+                    .buttonStyle(SquishButtonStyle(hoverBackground: false))
+                    .accessibilityLabel(icon == .defaultChoice ? "\(icon.name), default" : icon.name)
+                    .accessibilityAddTraits(selected ? .isSelected : [])
+                }
+            }
+
+            Text("Changes the Dock icon while Browsi is running.")
+                .font(.caption).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 4)
+        .onChange(of: selection) { _, icon in collection = icon.collection }
+    }
+
+    @ViewBuilder private func iconImage(_ icon: AppIconChoice) -> some View {
+        if let image = icon.image {
+            Image(nsImage: image).resizable().scaledToFit()
+        } else {
+            Color.secondary
+        }
     }
 }
 
@@ -458,6 +511,8 @@ private struct PasswordsPane: View {
                 Toggle("Offer to save passwords", isOn: $prefs.offerToSavePasswords)
                 Toggle("AutoFill saved passwords", isOn: $prefs.autofillPasswords)
                 Toggle("Require Touch ID or password to AutoFill", isOn: $prefs.requireAuthToFill)
+                Toggle("Fill forms with my contact card", isOn: $prefs.smartFormFill)
+                    .help("Offers your “My Card” from Contacts on address and contact forms. Apple Intelligence works out unusual fields on your Mac.")
                 Toggle("Show “Sign in with Apple” in a native sheet", isOn: $prefs.appleSignInSheet)
                     .help("Apple’s sign-in opens over the page instead of replacing it, and your saved Apple ID is filled in after Touch ID or your password.")
                 Picker("Stay unlocked for", selection: $prefs.authGracePeriod) {

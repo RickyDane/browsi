@@ -14,13 +14,49 @@ enum AppTheme: String, CaseIterable, Identifiable {
     }
 }
 
-/// Alternate app icons (Design/galaxy). macOS has no alternate-icon API, so the choice is applied
+enum AppIconCollection: String, CaseIterable, Identifiable {
+    case space, exploration, galaxy
+    var id: String { rawValue }
+    var name: String { rawValue.capitalized }
+    var icons: [AppIconChoice] { AppIconChoice.allCases.filter { $0.collection == self } }
+}
+
+/// Alternate app icons (Design/galaxy, Design/space-02 and Design/space-03). macOS has no alternate-icon API, so the choice is applied
 /// to the running app's Dock icon via `NSApp.applicationIconImage`.
 enum AppIconChoice: String, CaseIterable, Identifiable {
+    case pulsar, orbitalB, softSaturn, transit, moonGate, orbitCursor, solarSail, binary
+    case gravityB, novaBloom, deepfield, starTrail, redDwarf, lagrange, ionRibbon, cosmicEye
     case nebulaSparkle, boldViolet, goldBlue, dustLane, minimalSwirl
+    static let defaultChoice: Self = .pulsar
     var id: String { rawValue }
+    var collection: AppIconCollection {
+        switch self {
+        case .pulsar, .orbitalB, .softSaturn, .transit, .moonGate, .orbitCursor, .solarSail, .binary:
+            .space
+        case .gravityB, .novaBloom, .deepfield, .starTrail, .redDwarf, .lagrange, .ionRibbon, .cosmicEye:
+            .exploration
+        case .nebulaSparkle, .boldViolet, .goldBlue, .dustLane, .minimalSwirl:
+            .galaxy
+        }
+    }
     var name: String {
         switch self {
+        case .pulsar: "Pulsar"
+        case .orbitalB: "Orbital b"
+        case .softSaturn: "Soft Saturn"
+        case .transit: "Transit"
+        case .moonGate: "Moon gate"
+        case .orbitCursor: "Orbit cursor"
+        case .solarSail: "Solar sail"
+        case .binary: "Binary"
+        case .gravityB: "Gravity b"
+        case .novaBloom: "Nova bloom"
+        case .deepfield: "Deepfield"
+        case .starTrail: "Star trail"
+        case .redDwarf: "Red dwarf"
+        case .lagrange: "Lagrange"
+        case .ionRibbon: "Ion ribbon"
+        case .cosmicEye: "Cosmic eye"
         case .nebulaSparkle: "Nebula sparkle"
         case .boldViolet: "Bold violet"
         case .goldBlue: "Gold and blue"
@@ -30,6 +66,22 @@ enum AppIconChoice: String, CaseIterable, Identifiable {
     }
     var assetName: String {
         switch self {
+        case .pulsar: "AppIconPulsar"
+        case .orbitalB: "AppIconOrbitalB"
+        case .softSaturn: "AppIconSoftSaturn"
+        case .transit: "AppIconTransit"
+        case .moonGate: "AppIconMoonGate"
+        case .orbitCursor: "AppIconOrbitCursor"
+        case .solarSail: "AppIconSolarSail"
+        case .binary: "AppIconBinary"
+        case .gravityB: "AppIconGravityB"
+        case .novaBloom: "AppIconNovaBloom"
+        case .deepfield: "AppIconDeepfield"
+        case .starTrail: "AppIconStarTrail"
+        case .redDwarf: "AppIconRedDwarf"
+        case .lagrange: "AppIconLagrange"
+        case .ionRibbon: "AppIconIonRibbon"
+        case .cosmicEye: "AppIconCosmicEye"
         case .boldViolet: "AppIconR1"
         case .goldBlue: "AppIconR2"
         case .dustLane: "AppIconR3"
@@ -39,9 +91,9 @@ enum AppIconChoice: String, CaseIterable, Identifiable {
     }
     var image: NSImage? { NSImage(named: assetName) }
 
-    /// Sets the Dock icon. The default icon resets to the bundle's own icon.
-    func apply() {
-        NSApp?.applicationIconImage = self == .nebulaSparkle ? nil : image
+    /// Apply even the default explicitly: macOS may cache an older bundle icon after an update.
+    func apply(using setImage: (NSImage?) -> Void = { NSApp?.applicationIconImage = $0 }) {
+        setImage(image)
     }
 }
 
@@ -157,6 +209,8 @@ final class Preferences {
     var authGracePeriod: Int { didSet { d.set(authGracePeriod, forKey: "authGracePeriod") } }
     var neverSavePasswordHosts: Set<String> { didSet { d.set(Array(neverSavePasswordHosts), forKey: "neverSavePasswordHosts") } }
     var syncPasswordsWithICloud: Bool { didSet { d.set(syncPasswordsWithICloud, forKey: "syncPasswordsWithICloud") } }
+    /// Offer "My Card" from Contacts on address and contact forms.
+    var smartFormFill: Bool { didSet { d.set(smartFormFill, forKey: "smartFormFill") } }
 
     // MARK: Websites
     var defaultZoom: Double { didSet { d.set(defaultZoom, forKey: "defaultZoom") } }
@@ -195,7 +249,7 @@ final class Preferences {
 
         theme = raw("theme", .system)
         spaceTheme = bool("spaceTheme", true)
-        appIcon = raw("appIcon", .nebulaSparkle)
+        appIcon = raw("appIcon", AppIconChoice.defaultChoice)
         sidebarWidth = dbl("sidebarWidth", 252)
         tabDensity = raw("tabDensity", .comfortable)
         animatedBackground = bool("animatedBackground", true)
@@ -228,6 +282,7 @@ final class Preferences {
         authGracePeriod = int("authGracePeriod", 300)
         neverSavePasswordHosts = set("neverSavePasswordHosts")
         syncPasswordsWithICloud = bool("syncPasswordsWithICloud", false)
+        smartFormFill = bool("smartFormFill", true)
 
         defaultZoom = dbl("defaultZoom", 1)
         javaScriptEnabled = bool("javaScriptEnabled", true)
@@ -273,7 +328,7 @@ final class Preferences {
         blockPopups = fresh.blockPopups; clearHistoryOnQuit = fresh.clearHistoryOnQuit
         offerToSavePasswords = fresh.offerToSavePasswords; autofillPasswords = fresh.autofillPasswords
         requireAuthToFill = fresh.requireAuthToFill; authGracePeriod = fresh.authGracePeriod
-        neverSavePasswordHosts = []; syncPasswordsWithICloud = false
+        neverSavePasswordHosts = []; syncPasswordsWithICloud = false; smartFormFill = fresh.smartFormFill
         defaultZoom = fresh.defaultZoom; javaScriptEnabled = fresh.javaScriptEnabled
         autoplay = fresh.autoplay; minimumFontSize = fresh.minimumFontSize
         downloadFolderBookmark = nil; askWhereToSave = fresh.askWhereToSave; revealDownloads = fresh.revealDownloads

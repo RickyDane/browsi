@@ -19,7 +19,7 @@
 ## Contents
 
 - [Smart features](#smart-features)
-  - [Smart answers](#smart-answers) · [Page summary & Q&A](#page-summary--qa) · [Find that understands questions](#find-that-understands-questions) · [Page translation](#on-device-page-translation) · [Page actions](#page-actions) · [Watch a page](#watch-a-page) · [Smart tab titles](#smart-tab-titles) · [Smart Rename for downloads](#smart-rename-for-downloads)
+  - [Smart answers](#smart-answers) · [Page summary & Q&A](#page-summary--qa) · [Find that understands questions](#find-that-understands-questions) · [Page translation](#on-device-page-translation) · [Page actions](#page-actions) · [Watch a page](#watch-a-page) · [Smart tab titles](#smart-tab-titles) · [Smart Rename for downloads](#smart-rename-for-downloads) · [Smart form fill](#smart-form-fill)
 - [Browsing](#browsing)
 - [Look & feel](#look--feel)
 - [Privacy, passwords & extensions](#privacy-passwords--extensions)
@@ -49,6 +49,7 @@ no API key and no cloud service.
 | [Watch a page](#watch-a-page) | ⌘K › Watch Page… | Notifies you when a page changes in a way you care about |
 | [Smart tab titles](#smart-tab-titles) | Sidebar | Shortens long, SEO-stuffed tab titles |
 | [Smart Rename](#smart-rename-for-downloads) | Downloads | Gives downloaded files readable names |
+| [Smart form fill](#smart-form-fill) | Address & contact forms | Fills forms from your contact card in Contacts |
 
 ### Smart answers
 
@@ -143,6 +144,15 @@ Unclear names like `file_8f3a2c91.pdf` are renamed using the source page and the
 
 ---
 
+### Smart form fill
+
+Click into an address or contact form (checkout, shipping, sign-up) and Browsi offers your **My Card** from
+Contacts. Pick it, or press ↩, and the name, email, phone, company and address are filled in, including
+country menus. Fields are matched by their `autocomplete` attribute and by English, German, French and
+Spanish labels. The on-device model works out the ones those can't place. Browsi only fills empty fields,
+skips login, search and payment fields, and only fills on HTTPS. It asks for Contacts access the first
+time you use it. Toggle in Settings › Passwords › AutoFill.
+
 ## Browsing
 
 <table>
@@ -199,6 +209,8 @@ Also:
   click (Metal shader). Toggle in Settings › Appearance.
 - **Settings**: a System-Settings-style window with about 40 options across General, Appearance, Tabs & Spaces,
   Privacy & Security, Passwords, Websites, Downloads and Advanced.
+
+- **App icons**: Settings › Appearance shows your current icon, a default reset, and compact Space, Exploration and Galaxy collections with 21 icons in total. Pulsar is the default; existing saved choices are kept. Alternate choices change the running app's Dock icon.
 
 ## Privacy, passwords & extensions
 

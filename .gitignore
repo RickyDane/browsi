@@ -4,3 +4,4 @@ build/
 DerivedData/
 xcuserdata/
 Config/Signing.local.xcconfig
+.playwright-mcp/
