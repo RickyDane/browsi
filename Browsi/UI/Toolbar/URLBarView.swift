@@ -46,18 +46,6 @@ struct URLBarView: View {
                     .transition(.scale.combined(with: .opacity))
                 }
             }
-            if host != nil, SmartSearch.isAvailable {
-                Button {
-                    if browser.pageAssistantVisible { browser.closePageAssistant() } else { browser.togglePageAssistant(.summary) }
-                } label: {
-                    Image(systemName: "apple.intelligence")
-                        .foregroundStyle(browser.pageAssistantVisible ? AnyShapeStyle(browser.selectedSpace.color)
-                                                                      : AnyShapeStyle(.secondary))
-                        .symbolEffect(.bounce, value: browser.pageAssistantVisible)
-                }
-                .buttonStyle(SquishButtonStyle()).padding(-5)
-                .help("Summarize this page (⌘⇧S) · Ask about it (⌘⇧E)")
-            }
             if host != nil {
                 let blocking = ContentBlocker.shared.isEnabled(for: host)
                 Button { browser.toggleBlockingForSelectedSite() } label: {

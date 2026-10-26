@@ -53,7 +53,8 @@ struct WebViewHost: NSViewRepresentable {
         func attach(_ webView: WKWebView) {
             pending = nil
             subviews.forEach { $0.removeFromSuperview() }
-            webView.removeFromSuperview()
+            // Let AppKit reparent directly rather than explicitly moving through a nil window.
+            // The latter can pause media when returning from the floating player.
             webView.frame = bounds
             webView.autoresizingMask = [.width, .height]
             addSubview(webView)

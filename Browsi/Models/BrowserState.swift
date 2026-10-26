@@ -174,6 +174,7 @@ final class BrowserState {
         let previous = selectedTab
         if tab.isInFloatingPlayer { floatingPlayer.close(returnTo: tab) }
         if previous === tab { return }
+        floatingPlayer.cancelPendingPopOut()
         if peek?.tab !== tab { closePeek() }
         if let space = space(of: tab), space.id != selectedSpaceID { switchSpace(to: space) }
         if !closingPrevious, let old = previous?.controller?.webView, old.window != nil {
@@ -296,6 +297,7 @@ final class BrowserState {
     func showHome() {
         let space = selectedSpace
         guard let previous = space.selectedTab else { return }
+        floatingPlayer.cancelPendingPopOut()
         closePeek()
         if let old = previous.controller?.webView, old.window != nil {
             Task { previous.snapshot = try? await old.takeSnapshot(configuration: nil) }
@@ -409,6 +411,7 @@ final class BrowserState {
 
     func switchSpace(to space: Space) {
         guard space.id != selectedSpaceID else { return }
+        floatingPlayer.cancelPendingPopOut()
         let from = spaces.firstIndex { $0.id == selectedSpaceID } ?? 0
         let to = spaces.firstIndex { $0.id == space.id } ?? 0
         spaceSwitchDirection = to >= from ? 1 : -1

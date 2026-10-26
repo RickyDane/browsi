@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="curvature.css">
+  <title>Browsi — Bending the familiar</title>
+  <script src="curvature.js" defer></script>
+</head>
+<body>
+  <header>
+    <a class="brand" href="/">b<span>r</span>owsi <small>/ interaction lab</small></a>
+    <span class="edition"><i></i> STUDY 002 &nbsp;—&nbsp; SPATIAL AUTHENTICATION</span>
+  </header>
+  <main>
+    <section class="intro">
+      <div><p class="eyebrow">Not a layer of light. A change in space.</p><h1>Bending the familiar.</h1>
+      <p class="subtitle">The page becomes a surface. Authentication changes its geometry.<br>Five real-time deformation studies—not wave overlays.</p></div>
+      <a class="previous" href="/">View the first studies ↗</a>
+    </section>
+    <nav class="directions" aria-label="Spatial concepts">
+      <button data-mode="0" aria-pressed="true"><span>01 / ATTRACTION</span><strong>Gravity Well</strong><small>A page with mass.</small></button>
+      <button data-mode="1" aria-pressed="false"><span>02 / TORSION</span><strong>Orbital Shear</strong><small>Space takes a turn.</small></button>
+      <button data-mode="2" aria-pressed="false"><span>03 / TOPOLOGY</span><strong>Saddle Space</strong><small>Opposing curvatures.</small></button>
+      <button data-mode="3" aria-pressed="false"><span>04 / MATERIAL</span><strong>Living Fold</strong><small>A surface, not a screen.</small></button>
+      <button data-mode="4" aria-pressed="false"><span>05 / COMPRESSION</span><strong>Spatial Squeeze</strong><small>Make room in reality.</small></button>
+    </nav>
+    <section class="lab" aria-label="Interactive spatial preview">
+      <div class="lab-bar">
+        <div class="method" aria-label="Authentication method"><button data-method="passkey" aria-pressed="true">Passkey</button><button data-method="apple" aria-pressed="false">Continue with Apple</button></div>
+        <span class="engine" id="engine">WEBGL / DEFORMABLE SURFACE</span>
+      </div>
+      <div class="stage" id="stage">
+        <div class="stage-label"><span id="stage-name">01 — GRAVITY WELL</span><span>SIMULATION / NO REAL AUTHENTICATION</span></div>
+        <canvas id="surface" aria-label="A simulated website whose text, images and edges bend in three dimensions"></canvas>
+        <div class="fallback" id="fallback" hidden>WebGL is unavailable. Enable hardware acceleration and reload to see the spatial studies.</div>
+        <section class="prompt" id="prompt" aria-label="Simulated authentication prompt" inert>
+          <div class="prompt-top"><span>⊙ &nbsp; BROWSI</span><span>DEMO</span></div>
+          <div class="symbol" id="symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="4.5"/><path d="m11.3 11.3 8.2 8.2m-3-3 2-2m-5 2 2-2"/></svg></div>
+          <h2 id="prompt-title">Sign in with a passkey</h2>
+          <p>Continue to <strong>studio.example</strong></p>
+          <div class="account"><span class="avatar">JD</span><div><strong>Jamie Davis</strong><small>jamie@example.com · Demo account</small></div><span>⌁</span></div>
+          <div class="authenticate"><svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M5 8a8 8 0 0 1 14 0M3 13v-1m18 1v-1M7 17v-5a5 5 0 0 1 10 0v4m-7 5V12a2 2 0 0 1 4 0v7m-9 1v-5m12 6 2-5M12 12v6"/></g></svg><span id="auth-status">Waiting for Touch ID · simulated</span></div>
+          <button id="cancel">Cancel demo</button>
+        </section>
+        <div class="stage-bottom"><span><i></i> <span id="phase" role="status" aria-live="polite">Preparing surface</span></span><span id="depth-readout">CURVATURE 075</span></div>
+      </div>
+      <div class="controls">
+        <div class="playback"><button class="primary" id="replay">↻ Replay deformation</button><button id="release">Release space</button></div>
+        <label class="depth">Depth <input id="depth" type="range" min="15" max="100" value="75"><output for="depth" id="depth-value">75%</output></label>
+        <div class="toggles"><label><input type="checkbox" id="grid" checked> Surface grid</label><label><input type="checkbox" id="show-prompt" checked> Prompt</label><label><input type="checkbox" id="slow"> Slow</label><label><input type="checkbox" id="reduced"> Reduce motion</label></div>
+      </div>
+    </section>
+    <section class="notes" aria-label="Design explanation">
+      <div><p class="eyebrow">The spatial gesture</p><h2 id="note-title">Gravity Well</h2><p id="description"></p></div>
+      <div><p class="eyebrow">What actually bends</p><p id="geometry"></p></div>
+      <div><p class="eyebrow">The authentication plane</p><p>The demo prompt stays flat and readable above the deformed page. A real implementation would leave Apple and system authentication UI untouched.</p></div>
+    </section>
+  </main>
+  <footer><span>Browsi / Spatial studies</span><span>Actual mesh deformation · All accounts fictional · Escape to release</span></footer>
+</body>
+</html>

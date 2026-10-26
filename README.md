@@ -66,7 +66,7 @@ can click.
 
 <img src="docs/screenshots/page-assistant.webp" width="820" alt="Glass side panel with a one-line gist, key points and a follow-up question about the page">
 
-**⌘⇧S** (or the Apple Intelligence button in the address bar) opens a glass side panel with a
+**⌘⇧S** opens a glass side panel with a
 one-line gist of the page and its key points. Then you can ask follow-up questions.
 
 - Citations like **[2]** are clickable and scroll the page to that passage.
@@ -169,7 +169,7 @@ time you use it. Toggle in Settings › Passwords › AutoFill.
     <td><img src="docs/screenshots/link-peek.webp" alt="Link Peek glass preview over a page"></td>
   </tr>
   <tr>
-    <td><b>Floating video</b>: leave a tab that's playing a video and the video pops out into a floating window you can drag and resize. Double-click it to go back to the tab.</td>
+    <td><b>Floating video</b>: leave a tab that's playing a video (including muted video) and the video pops out into a floating window you can drag and resize. Double-click it to go back to the tab. Rapid tab switches cancel outdated pop-out attempts.</td>
     <td><b>Link Peek</b>: ⇧-click a link to preview it in a glass window. ⌘↩ opens it as a tab, Esc closes it.</td>
   </tr>
   <tr>

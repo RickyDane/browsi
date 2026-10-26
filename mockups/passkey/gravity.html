@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="curvature.css">
+  <link rel="stylesheet" href="gravity.css">
+  <title>Browsi — Gravity, in motion</title>
+  <script src="curvature.js" defer></script>
+</head>
+<body data-study="gravity">
+  <header>
+    <a class="brand" href="/">b<span>r</span>owsi <small>/ interaction lab</small></a>
+    <span class="edition"><i></i> STUDY 003 &nbsp;—&nbsp; GRAVITY WELL REVISIONS</span>
+  </header>
+  <main>
+    <section class="intro">
+      <div><p class="eyebrow">One click. A ripple through space.</p><h1>Gravity, in motion.</h1>
+      <p class="subtitle">Your click is the epicenter. The wave carries the curvature across the page.<br>Five revisions of Gravity Well. Click anywhere on the page to move the source.</p></div>
+      <a class="previous" href="curvature.html">Original spatial studies ↗</a>
+    </section>
+    <nav class="directions" aria-label="Gravity Well revisions">
+      <button data-mode="0" aria-pressed="true"><span>01 / SINGLE FRONT</span><strong>Quiet Tide</strong><small>One wave. A calm descent.</small></button>
+      <button data-mode="1" aria-pressed="false"><span>02 / DOUBLE FRONT</span><strong>Twin Ripple</strong><small>A close-following echo.</small></button>
+      <button data-mode="2" aria-pressed="false"><span>03 / ELASTICITY</span><strong>Elastic Wake</strong><small>A softer, physical rebound.</small></button>
+      <button data-mode="3" aria-pressed="false"><span>04 / PRESSURE</span><strong>Raised Rim</strong><small>A sculpted travelling crest.</small></button>
+      <button data-mode="4" aria-pressed="false"><span>05 / TWO-STAGE PULL</span><strong>Deep Undertow</strong><small>A ripple, then a deeper pull.</small></button>
+    </nav>
+    <section class="lab" aria-label="Click-origin gravity ripple preview">
+      <div class="lab-bar">
+        <div class="method" aria-label="Authentication method"><button data-method="passkey" aria-pressed="true">Passkey</button><button data-method="apple" aria-pressed="false">Continue with Apple</button></div>
+        <span class="engine" id="engine">WEBGL / TRAVELLING CURVATURE</span>
+      </div>
+      <div class="stage" id="stage">
+        <div class="stage-label"><span id="stage-name">01 — QUIET TIDE</span><span>CLICK THE PAGE TO MOVE THE EPICENTER</span></div>
+        <canvas id="surface" tabindex="0" role="button" aria-label="Gravity ripple preview. Click anywhere to start a ripple there; Enter replays from the last origin."></canvas>
+        <i id="origin-marker" class="origin-marker" aria-hidden="true"></i>
+        <div class="fallback" id="fallback" hidden>WebGL is unavailable. Enable hardware acceleration and reload to see the gravity ripples.</div>
+        <section class="prompt" id="prompt" aria-label="Simulated authentication prompt" inert>
+          <div class="prompt-top"><span>⊙ &nbsp; BROWSI</span><span>DEMO</span></div>
+          <div class="symbol" id="symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="4.5"/><path d="m11.3 11.3 8.2 8.2m-3-3 2-2m-5 2 2-2"/></svg></div>
+          <h2 id="prompt-title">Sign in with a passkey</h2>
+          <p>Continue to <strong>studio.example</strong></p>
+          <div class="account"><span class="avatar">JD</span><div><strong>Jamie Davis</strong><small>jamie@example.com · Demo account</small></div><span>⌁</span></div>
+          <div class="authenticate"><svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M5 8a8 8 0 0 1 14 0M3 13v-1m18 1v-1M7 17v-5a5 5 0 0 1 10 0v4m-7 5V12a2 2 0 0 1 4 0v7m-9 1v-5m12 6 2-5M12 12v6"/></g></svg><span id="auth-status">Waiting for Touch ID · simulated</span></div>
+          <button id="cancel">Cancel demo</button>
+        </section>
+        <div class="stage-bottom"><span><i></i> <span id="phase" role="status" aria-live="polite">Preparing ripple</span></span><span id="depth-readout">CURVATURE 075</span></div>
+      </div>
+      <div class="wave-progress" aria-hidden="true"><span id="wave-progress"></span></div>
+      <div class="controls">
+        <div class="playback"><button class="primary" id="replay">↻ Replay ripple</button><button id="release">Release space</button></div>
+        <label class="depth">Depth <input id="depth" type="range" min="15" max="100" value="75"><output for="depth" id="depth-value">75%</output></label>
+        <div class="toggles"><label><input type="checkbox" id="grid" checked> Surface grid</label><label><input type="checkbox" id="show-prompt" checked> Prompt</label><label><input type="checkbox" id="slow"> Slow</label><label><input type="checkbox" id="reduced"> Reduce motion</label></div>
+      </div>
+    </section>
+    <div class="interaction-note"><span>↖ Click the page to choose an origin.</span><span>Hide the prompt + enable Slow to inspect the travelling surface.</span></div>
+    <section class="notes" aria-label="Revision explanation">
+      <div><p class="eyebrow">The character</p><h2 id="note-title">Quiet Tide</h2><p id="description"></p></div>
+      <div><p class="eyebrow">The wave and the well</p><p id="geometry"></p></div>
+      <div><p class="eyebrow">One shared behavior</p><p>The untouched page stays flat ahead of the wave. Behind it, the surface curves into the well. The demo prompt stays flat; no real credentials or system dialogs are involved.</p></div>
+    </section>
+  </main>
+  <footer><span>Browsi / Gravity Well, revised</span><span>Click-origin propagation · Real mesh deformation · Escape to release</span></footer>
+</body>
+</html>

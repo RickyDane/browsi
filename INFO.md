@@ -49,7 +49,7 @@ MainWindowView
 | `Web/TabWebController.swift` | Owns the `WKWebView`; KVO → `Tab`; navigation/UI delegates, error page, popups, downloads. |
 | `Web/WebConfigFactory.swift` | Per-tab `WKWebViewConfiguration` (own `WKUserContentController`, autofill script, rule list). |
 | `Web/WebViewHost.swift` | Re-parents the selected tab's web view into the SwiftUI tree. |
-| `Web/FloatingPlayer.swift` | Moves a playing tab's web view into a floating `NSPanel` and restyles the video (via JS in the isolated world) to fill it. |
+| `Web/FloatingPlayer.swift` | Moves a playing tab's web view into a floating `NSPanel` and restyles the video (via JS in the isolated world) to fill it. Dispatches detection before host detachment, supports muted videos, and uses request-scoped cleanup to reject stale tab/space/home attempts. |
 | `UI/PeekOverlay.swift` | ⇧-click Link Peek modal; the peek tab is promoted to a real tab with `BrowserState.promotePeek()`. |
 | `Persistence/Preferences.swift` | Every setting, plus `UserAgent` (claims the installed Safari version so Google sign-in accepts the engine). |
 | `Web/LinkBridge.swift` | Isolated-world script that turns trusted middle-clicks on links into new tabs (WebKit doesn't navigate on middle-click). |
@@ -98,6 +98,8 @@ MainWindowView
 **Done:** everything listed under Features in the README; unit tests for the parser, palette ranking, keychain, blocker rules and suspension logic.
 
 **Notes:**
+
+- The sidebar address bar has no Apple Intelligence button; page summary and Q&A remain available with ⌘⇧S / ⌘⇧E.
 - Closing tabs skips unloaded pinned tiles when choosing the next tab, falling back to Home when no open tabs remain.
 - Settings › Appearance offers 21 app icons in three switchable collections (Space, Exploration, Galaxy), with a current-icon summary, default reset and compact four-column grid. Collection 04 remains concept artwork only. Pulsar is the bundled icon and default preference; saved alternate choices remain unchanged and apply to the running app's Dock icon.
 - The default Dock icon is also applied explicitly from its image asset, avoiding stale macOS bundle-icon caches after updates.
@@ -110,6 +112,7 @@ MainWindowView
 - Page assistant and smart titles generate plain text with `.permissiveContentTransformations` guardrails: guided generation refused harmless news headlines in testing.
 
 **Known limitations**
+- Floating video currently detects large videos in the main document only, not embedded iframe players. Fullscreen videos are left under WebKit's control.
 - The page assistant reads at most ~5,000 characters per request (on-device context window), so long pages are summarized from their opening; questions pull in the passages that match them. PDFs shown in a tab have no readable text yet.
 - Single window; no private-browsing window yet.
 - No dedicated history UI (history is searchable via the palette).

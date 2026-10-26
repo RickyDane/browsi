@@ -13,6 +13,8 @@ final class FloatingPlayer {
     private(set) weak var tab: Tab?
     @ObservationIgnored weak var browser: BrowserState?
     @ObservationIgnored private var panel: NSPanel?
+    @ObservationIgnored private var requestGeneration = 0
+    @ObservationIgnored private var panelGeneration = 0
     var isPlaying = true
 
     var isActive: Bool { tab != nil }
@@ -21,14 +23,14 @@ final class FloatingPlayer {
 
     private static let markAttr = "data-browsi-float"
 
-    /// Finds the largest audible playing video and *extracts* it: the element is promoted into the
+    /// Finds the largest playing video and *extracts* it: the element is promoted into the
     /// browser's top layer (Popover API), which renders above everything else on the page regardless of
     /// stacking contexts, transforms or fixed headers, and is sized to the viewport. The element is not
     /// moved in the DOM, so the site's player keeps working. Returns [videoWidth, videoHeight] or null.
-    private static let popOutJS = """
+    private static func popOutJS(request: String) -> String { """
     (() => {
       const vids = [...document.querySelectorAll('video')].filter(v =>
-        !v.paused && !v.ended && v.readyState > 2 && v.videoWidth > 0 && !v.muted && v.volume > 0);
+        !v.paused && !v.ended && v.readyState >= 2 && v.videoWidth > 0 && v.videoHeight > 0);
       if (!vids.length) return null;
       vids.sort((a, b) => b.clientWidth * b.clientHeight - a.clientWidth * a.clientHeight);
       const v = vids[0];
@@ -57,6 +59,7 @@ final class FloatingPlayer {
         (document.head || document.documentElement).appendChild(s);
       }
       v.setAttribute('\(markAttr)', '');
+      v.dataset.browsiFloatRequest = '\(request)';
       document.documentElement.setAttribute('\(markAttr)-active', '');
       if (typeof v.showPopover === 'function') {
         if (!v.hasAttribute('popover')) { v.setAttribute('popover', 'manual'); v.dataset.browsiAddedPopover = '1'; }
@@ -72,7 +75,7 @@ final class FloatingPlayer {
       }
       return [v.videoWidth, v.videoHeight];
     })()
-    """
+    """ }
 
     private static let restoreJS = """
     (() => {
@@ -81,6 +84,7 @@ final class FloatingPlayer {
         try { if (v.matches(':popover-open')) v.hidePopover(); } catch (e) {}
         if (v.dataset.browsiAddedPopover) { v.removeAttribute('popover'); delete v.dataset.browsiAddedPopover; }
         v.removeAttribute('\(markAttr)');
+        delete v.dataset.browsiFloatRequest;
       });
       document.documentElement.removeAttribute('\(markAttr)-active');
       delete document.documentElement.dataset.browsiPopoverError;
@@ -107,43 +111,54 @@ final class FloatingPlayer {
 
     // MARK: Lifecycle
 
+    /// WebKit evaluations cannot be cancelled once dispatched. Invalidate their native result;
+    /// request-scoped restoration also prevents stale cleanup from undoing a newer extraction.
+    func cancelPendingPopOut() {
+        requestGeneration += 1
+    }
+
+    private func canPopOut(_ tab: Tab, webView: WKWebView) -> Bool {
+        guard let browser else { return false }
+        return Preferences.shared.floatingVideoEnabled && tab !== browser.selectedTab
+            && browser.allTabs.contains(where: { $0 === tab })
+            && tab.controller?.webView === webView && !tab.isInElementFullscreen
+            && webView.fullscreenState == .notInFullscreen
+    }
+
     /// Called after `tab` stopped being the visible tab.
     func considerPopOut(_ tab: Tab) {
+        cancelPendingPopOut()
         debugLog("considerPopOut \(tab.displayTitle) enabled=\(Preferences.shared.floatingVideoEnabled) hasWebView=\(tab.controller != nil)")
         guard Preferences.shared.floatingVideoEnabled, tab !== self.tab,
-              let webView = tab.controller?.webView else { return }
+              let webView = tab.controller?.webView, canPopOut(tab, webView: webView) else { return }
         debugLog("considerPopOut frame=\(NSStringFromRect(webView.frame)) inWindow=\(webView.window != nil)")
-        Task {
-            let state = await webView.requestMediaPlaybackState()
-            debugLog("considerPopOut: playback state \(state.rawValue)")
-            guard state == .playing else { return }
-            let result: Any?
-            do {
-                result = try await webView.evaluateJavaScript(Self.popOutJS, contentWorld: .defaultClient)
-            } catch {
-                debugLog("popOut JS failed: \(error.localizedDescription)")
-                return
+        let generation = requestGeneration
+        let request = UUID().uuidString
+        // Dispatch BEFORE returning to SwiftUI. Starting a Task or asking for playback state
+        // first lets the host detach the view, which pauses the video before detection runs.
+        webView.evaluateJavaScript(Self.popOutJS(request: request), in: nil, in: .defaultClient) { [weak self] result in
+            MainActor.assumeIsolated {
+                guard let self, self.requestGeneration == generation,
+                      self.canPopOut(tab, webView: webView),
+                      case .success(let value) = result,
+                      let dims = value as? [Double], dims.count == 2, dims[0] > 0, dims[1] > 0 else {
+                    let restore = """
+                    (() => {
+                      if (document.querySelector('[\(Self.markAttr)]')?.dataset.browsiFloatRequest !== '\(request)') return;
+                      \(Self.restoreJS)
+                    })()
+                    """
+                    webView.evaluateJavaScript(restore, in: nil, in: .defaultClient) { _ in }
+                    return
+                }
+                self.present(tab: tab, webView: webView, aspect: NSSize(width: dims[0], height: dims[1]))
             }
-            debugLog("popOut JS result: \(String(describing: result))")
-            #if DEBUG
-            if result == nil || result is NSNull {
-                let diag = try? await webView.evaluateJavaScript("""
-                  JSON.stringify([...document.querySelectorAll('video')].map(v => ({p:v.paused,e:v.ended,m:v.muted,vol:v.volume,rs:v.readyState,w:v.clientWidth,h:v.clientHeight,vw:v.videoWidth})).concat([{vis:document.visibilityState, iw:innerWidth, ih:innerHeight}]))
-                """, contentWorld: .defaultClient)
-                debugLog("popOut diag: \(String(describing: diag))")
-            }
-            #endif
-            guard let dims = result as? [Double], dims.count == 2, dims[0] > 0, dims[1] > 0,
-                  tab !== browser?.selectedTab, tab.controller?.webView === webView else {
-                if result != nil, !(result is NSNull) { _ = try? await webView.evaluateJavaScript(Self.restoreJS, contentWorld: .defaultClient) }
-                return
-            }
-            present(tab: tab, webView: webView, aspect: NSSize(width: dims[0], height: dims[1]))
         }
     }
 
     private func present(tab: Tab, webView: WKWebView, aspect: NSSize) {
         if self.tab != nil { close(returnTo: nil) }
+        panelGeneration += 1
         debugLog("present: floating \(tab.displayTitle) \(aspect.width)x\(aspect.height)")
         #if DEBUG
         Task {
@@ -173,7 +188,6 @@ final class FloatingPlayer {
         let panel = self.panel ?? makePanel()
         self.panel = panel
         let content = panel.contentView!
-        webView.removeFromSuperview()
         webView.frame = content.bounds
         webView.autoresizingMask = [.width, .height]
         content.addSubview(webView, positioned: .below, relativeTo: content.subviews.first)
@@ -197,14 +211,26 @@ final class FloatingPlayer {
                 panel.animator().setFrame(target, display: true)
             }
         } else {
+            // A new session may reuse the panel while the previous close is still fading out.
+            // Replace that fade as well as invalidating its completion handler.
+            NSAnimationContext.runAnimationGroup { ctx in
+                ctx.duration = Motion.reduceMotion ? 0.1 : 0.22
+                panel.animator().alphaValue = 1
+            }
             panel.setFrame(NSRect(origin: panel.frame.origin, size: target.size), display: true, animate: true)
         }
+        // Window reparenting can pause WebKit's media. Resume only the video we just captured,
+        // never an arbitrary paused element on the page.
+        webView.evaluateJavaScript("document.querySelector('[\(Self.markAttr)]')?.play().catch(() => {})", in: nil, in: .defaultClient) { _ in }
     }
 
     /// Ends the floating session. If `returnTo` is the floating tab, the video keeps playing
     /// and the web view goes back into the browser; otherwise the video is paused.
     func close(returnTo: Tab?) {
+        cancelPendingPopOut()
         guard let tab, let panel else { return }
+        panelGeneration += 1
+        let generation = panelGeneration
         let webView = tab.controller?.webView
         let keepPlaying = returnTo === tab
         self.tab = nil
@@ -212,6 +238,9 @@ final class FloatingPlayer {
         if let webView {
             if !keepPlaying { webView.evaluateJavaScript(Self.pauseJS, in: nil, in: .defaultClient) { _ in } }
             webView.evaluateJavaScript(Self.restoreJS, in: nil, in: .defaultClient) { _ in }
+            // Do not defer ownership cleanup to the fade: a replacement session invalidates
+            // that completion and would otherwise leave the old web view behind the new one.
+            if !keepPlaying, webView.superview === panel.contentView { webView.removeFromSuperview() }
         }
 
         NSAnimationContext.runAnimationGroup({ ctx in
@@ -219,13 +248,10 @@ final class FloatingPlayer {
             panel.animator().alphaValue = 0
         }, completionHandler: {
             MainActor.assumeIsolated {
-                guard self.tab == nil else { return }
+                guard self.tab == nil, self.panelGeneration == generation else { return }
                 panel.orderOut(nil)
-                // If the tab isn't being shown again, detach its web view from the panel.
-                if webView?.superview === panel.contentView, !keepPlaying { webView?.removeFromSuperview() }
             }
         })
-        if keepPlaying, webView?.superview === panel.contentView { webView?.removeFromSuperview() }
     }
 
     func backToTab() {

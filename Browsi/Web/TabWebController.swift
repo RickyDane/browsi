@@ -179,14 +179,16 @@ extension TabWebController: WKNavigationDelegate {
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         sync()
         delegate?.tabDidFinishNavigation(tab)
-        Task { [weak self] in
-            guard let self else { return }
-            if let icon = await FaviconLoader.shared.favicon(for: webView) { self.tab.favicon = icon }
+        Task { [weak tab] in
+            if let icon = await FaviconLoader.shared.favicon(for: webView) { tab?.favicon = icon }
         }
     }
 
     func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
-        Task { await MediaPlaybackBridge.refresh(tab, webView: webView) }
+        Task { [weak tab] in
+            guard let tab else { return }
+            await MediaPlaybackBridge.refresh(tab, webView: webView)
+        }
         if let host = webView.url?.host(), let icon = FaviconLoader.shared.cached(host: host) {
             tab.favicon = icon
         } else {

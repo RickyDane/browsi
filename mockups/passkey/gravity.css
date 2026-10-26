@@ -1,0 +1,10 @@
+body[data-study=gravity] #surface{cursor:crosshair}
+.origin-marker{position:absolute;z-index:4;width:11px;height:11px;border:1px solid #d8efb4;border-radius:50%;pointer-events:none;transform:translate(-50%,-50%);opacity:0;box-shadow:0 0 0 4px #10190d66;transition:opacity .4s}
+.origin-marker.visible{opacity:.9}
+.origin-marker:before,.origin-marker:after{content:"";position:absolute;background:#d8efb4;opacity:.7}
+.origin-marker:before{width:1px;height:19px;left:4px;top:-5px}
+.origin-marker:after{height:1px;width:19px;top:4px;left:-5px}
+.wave-progress{height:2px;background:#25341e}
+.wave-progress span{display:block;height:100%;width:0;background:#b6d88e;transition:opacity .3s}
+.interaction-note{display:flex;justify-content:space-between;gap:20px;padding-top:14px;font:9px ui-monospace,monospace;color:#7f946d;line-height:1.7}
+@media(max-width:560px){.interaction-note{display:block;font-size:8px}.interaction-note span{display:block}.directions button{min-width:151px}}
