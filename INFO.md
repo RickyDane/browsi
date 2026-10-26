@@ -49,7 +49,7 @@ MainWindowView
 | `Web/TabWebController.swift` | Owns the `WKWebView`; KVO → `Tab`; navigation/UI delegates, error page, popups, downloads. |
 | `Web/WebConfigFactory.swift` | Per-tab `WKWebViewConfiguration` (own `WKUserContentController`, autofill script, rule list). |
 | `Web/WebViewHost.swift` | Re-parents the selected tab's web view into the SwiftUI tree. |
-| `Web/FloatingPlayer.swift` | Moves a playing tab's web view into a floating `NSPanel` and restyles the video (via JS in the isolated world) to fill it. Dispatches detection before host detachment, supports muted videos, and uses request-scoped cleanup to reject stale tab/space/home attempts. |
+| `Web/FloatingPlayer.swift` | Moves a playing tab's web view into a floating `NSPanel` and restyles the video (via JS in the isolated world) to fill it. Persists the last size and position across sessions, keeping the panel on-screen after display changes. Dispatches detection before host detachment, supports muted videos, and uses request-scoped cleanup to reject stale tab/space/home attempts. |
 | `UI/PeekOverlay.swift` | ⇧-click Link Peek modal; the peek tab is promoted to a real tab with `BrowserState.promotePeek()`. |
 | `Persistence/Preferences.swift` | Every setting, plus `UserAgent` (claims the installed Safari version so Google sign-in accepts the engine). |
 | `Web/LinkBridge.swift` | Isolated-world script that turns trusted middle-clicks on links into new tabs (WebKit doesn't navigate on middle-click). |

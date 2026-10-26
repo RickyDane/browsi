@@ -12,7 +12,7 @@ private let log = Logger(subsystem: "dev.perlick.browsi", category: "FloatingPla
 final class FloatingPlayer {
     private(set) weak var tab: Tab?
     @ObservationIgnored weak var browser: BrowserState?
-    @ObservationIgnored private var panel: NSPanel?
+    @ObservationIgnored private var panel: FloatingPanel?
     @ObservationIgnored private var requestGeneration = 0
     @ObservationIgnored private var panelGeneration = 0
     var isPlaying = true
@@ -192,32 +192,42 @@ final class FloatingPlayer {
         webView.autoresizingMask = [.width, .height]
         content.addSubview(webView, positioned: .below, relativeTo: content.subviews.first)
 
-        // Size: 420pt wide, aspect of the video, bottom-right of the screen.
+        // Only the first presentation uses the video's aspect and bottom-right default.
+        panel.remembersFrame = false
         let width: CGFloat = 420
         let height = (width * aspect.height / aspect.width).rounded()
         panel.contentAspectRatio = aspect
         let screen = (NSApp.mainWindow?.screen ?? NSScreen.main)?.visibleFrame ?? .zero
-        let target = NSRect(x: screen.maxX - width - 24, y: screen.minY + 24, width: width, height: height)
-        let start = target.insetBy(dx: width * 0.06, dy: height * 0.06).offsetBy(dx: 0, dy: -16)
+        let fallback = NSRect(x: screen.maxX - width - 24, y: screen.minY + 24, width: width, height: height)
+        let target = Self.restoredFrame(Preferences.shared.floatingVideoFrame, fallback: fallback,
+                                        screens: NSScreen.screens.map(\.visibleFrame))
+        let start = target.insetBy(dx: target.width * 0.06, dy: target.height * 0.06).offsetBy(dx: 0, dy: -16)
+        let generation = panelGeneration
+        let didPresent: @Sendable () -> Void = {
+            MainActor.assumeIsolated {
+                guard self.tab != nil, self.panelGeneration == generation else { return }
+                panel.remembersFrame = true
+            }
+        }
 
         if !panel.isVisible {
             panel.setFrame(Motion.reduceMotion ? target : start, display: false)
             panel.alphaValue = 0
             panel.orderFrontRegardless()
-            NSAnimationContext.runAnimationGroup { ctx in
+            NSAnimationContext.runAnimationGroup({ ctx in
                 ctx.duration = 0.35
                 ctx.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 0.9, 0.3, 1.1)
                 panel.animator().alphaValue = 1
                 panel.animator().setFrame(target, display: true)
-            }
+            }, completionHandler: didPresent)
         } else {
             // A new session may reuse the panel while the previous close is still fading out.
             // Replace that fade as well as invalidating its completion handler.
-            NSAnimationContext.runAnimationGroup { ctx in
+            NSAnimationContext.runAnimationGroup({ ctx in
                 ctx.duration = Motion.reduceMotion ? 0.1 : 0.22
                 panel.animator().alphaValue = 1
-            }
-            panel.setFrame(NSRect(origin: panel.frame.origin, size: target.size), display: true, animate: true)
+                panel.animator().setFrame(target, display: true)
+            }, completionHandler: didPresent)
         }
         // Window reparenting can pause WebKit's media. Resume only the video we just captured,
         // never an arbitrary paused element on the page.
@@ -229,6 +239,7 @@ final class FloatingPlayer {
     func close(returnTo: Tab?) {
         cancelPendingPopOut()
         guard let tab, let panel else { return }
+        panel.remembersFrame = false
         panelGeneration += 1
         let generation = panelGeneration
         let webView = tab.controller?.webView
@@ -271,7 +282,29 @@ final class FloatingPlayer {
 
     // MARK: Panel
 
-    private func makePanel() -> NSPanel {
+    /// Keep a saved window reachable if a display was disconnected or its resolution changed.
+    nonisolated static func restoredFrame(_ saved: NSRect?, fallback: NSRect, screens: [NSRect]) -> NSRect {
+        guard var frame = saved,
+              [frame.minX, frame.minY, frame.width, frame.height].allSatisfy({ $0.isFinite }),
+              frame.width >= 220, frame.height >= 124 else { return fallback }
+        guard let screen = screens.max(by: {
+            let a = $0.intersection(frame), b = $1.intersection(frame)
+            return (a.isNull ? 0 : a.width * a.height) < (b.isNull ? 0 : b.width * b.height)
+        }), screen.intersects(frame) else {
+            guard let screen = screens.first(where: { $0.intersects(fallback) }) ?? screens.first else { return fallback }
+            frame.size.width = min(frame.width, screen.width)
+            frame.size.height = min(frame.height, screen.height)
+            frame.origin = NSPoint(x: screen.maxX - frame.width, y: screen.minY)
+            return frame
+        }
+        frame.size.width = min(frame.width, screen.width)
+        frame.size.height = min(frame.height, screen.height)
+        frame.origin.x = min(max(frame.minX, screen.minX), screen.maxX - frame.width)
+        frame.origin.y = min(max(frame.minY, screen.minY), screen.maxY - frame.height)
+        return frame
+    }
+
+    private func makePanel() -> FloatingPanel {
         let panel = FloatingPanel(contentRect: NSRect(x: 0, y: 0, width: 420, height: 236),
                                   styleMask: [.titled, .closable, .resizable, .fullSizeContentView, .nonactivatingPanel],
                                   backing: .buffered, defer: false)
@@ -286,6 +319,7 @@ final class FloatingPlayer {
         panel.backgroundColor = .black
         panel.hasShadow = true
         panel.minSize = NSSize(width: 220, height: 124)
+        panel.delegate = panel
 
         let content = NSView()
         content.wantsLayer = true
@@ -305,8 +339,17 @@ final class FloatingPlayer {
     }
 }
 
-private final class FloatingPanel: NSPanel {
+private final class FloatingPanel: NSPanel, NSWindowDelegate {
+    var remembersFrame = false
     override var canBecomeKey: Bool { true }
+
+    func windowDidMove(_ notification: Notification) { rememberFrame() }
+    func windowDidResize(_ notification: Notification) { rememberFrame() }
+
+    private func rememberFrame() {
+        guard remembersFrame else { return }
+        Preferences.shared.floatingVideoFrame = frame
+    }
 }
 
 /// Hover controls over the floating video. The whole surface drags the window.

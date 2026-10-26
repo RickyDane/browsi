@@ -187,6 +187,10 @@ final class Preferences {
     var closeTabSelection: CloseTabSelection { didSet { d.set(closeTabSelection.rawValue, forKey: "closeTabSelection") } }
     var linkPeekEnabled: Bool { didSet { d.set(linkPeekEnabled, forKey: "linkPeekEnabled") } }
     var floatingVideoEnabled: Bool { didSet { d.set(floatingVideoEnabled, forKey: "floatingVideoEnabled") } }
+    var floatingVideoFrame: NSRect? {
+        get { d.string(forKey: "floatingVideoFrame").map(NSRectFromString) }
+        set { d.set(newValue.map(NSStringFromRect), forKey: "floatingVideoFrame") }
+    }
 
     // MARK: Privacy & Security
     var contentBlockingEnabled: Bool { didSet { d.set(contentBlockingEnabled, forKey: "contentBlockingEnabled") } }

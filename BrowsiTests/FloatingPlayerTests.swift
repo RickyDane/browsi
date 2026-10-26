@@ -10,6 +10,24 @@ private final class BundleToken {}
 @MainActor
 @Suite(.serialized)
 struct FloatingPlayerTests {
+    @Test func restoresSavedGeometry() {
+        let screen = NSRect(x: 0, y: 0, width: 1440, height: 900)
+        let fallback = NSRect(x: 996, y: 24, width: 420, height: 236)
+        let saved = NSRect(x: 120, y: 240, width: 640, height: 360)
+        #expect(FloatingPlayer.restoredFrame(saved, fallback: fallback, screens: [screen]) == saved)
+        #expect(FloatingPlayer.restoredFrame(nil, fallback: fallback, screens: [screen]) == fallback)
+        #expect(FloatingPlayer.restoredFrame(.zero, fallback: fallback, screens: [screen]) == fallback)
+        let offscreen = NSRect(x: 2000, y: 1200, width: 640, height: 360)
+        let restored = FloatingPlayer.restoredFrame(offscreen, fallback: fallback, screens: [screen])
+        #expect(screen.contains(restored))
+        #expect(restored.size == saved.size)
+        let oversized = NSRect(x: -100, y: -100, width: 2000, height: 1200)
+        #expect(FloatingPlayer.restoredFrame(oversized, fallback: fallback, screens: [screen]) == screen)
+        let secondary = NSRect(x: -1440, y: 0, width: 1440, height: 900)
+        let onSecondary = NSRect(x: -1200, y: 200, width: 640, height: 360)
+        #expect(FloatingPlayer.restoredFrame(onSecondary, fallback: fallback, screens: [screen, secondary]) == onSecondary)
+    }
+
     private func until(_ timeout: Duration = .seconds(8), _ condition: () async -> Bool) async -> Bool {
         let deadline = ContinuousClock.now + timeout
         while ContinuousClock.now < deadline {
@@ -25,6 +43,8 @@ struct FloatingPlayerTests {
 
     @Test(arguments: [false, true])
     func switchingAwayFromPlayingTabPopsOut(muted: Bool) async throws {
+        let originalFrame = Preferences.shared.floatingVideoFrame
+        defer { Preferences.shared.floatingVideoFrame = originalFrame }
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 600),
                               styleMask: [.titled], backing: .buffered, defer: false)
         window.orderFront(nil)
@@ -61,6 +81,15 @@ struct FloatingPlayerTests {
         }
         #expect(extracted, "video must be extracted above all page content")
 
+        // Wait out the entrance animation, then simulate a user moving and resizing the panel.
+        try await Task.sleep(for: .milliseconds(500))
+        let panel = try #require(webView.window)
+        let screen = try #require(panel.screen).visibleFrame
+        let savedFrame = NSRect(x: screen.minX + 60, y: screen.minY + 80, width: 560, height: 315)
+        panel.setFrame(savedFrame, display: true)
+        #expect(Preferences.shared.floatingVideoFrame == savedFrame)
+        #expect(UserDefaults.standard.string(forKey: "floatingVideoFrame") == NSStringFromRect(savedFrame))
+
         browser.select(videoTab)
         host.attach(webView)
         #expect(!videoTab.isInFloatingPlayer)
@@ -96,6 +125,8 @@ struct FloatingPlayerTests {
         #expect(await until(.seconds(2)) {
             webView.window?.isVisible == true && (webView.window?.alphaValue ?? 0) > 0.99
         }, "an earlier close animation must not hide a reopened panel")
+        #expect(await until(.seconds(2)) { webView.window?.frame == savedFrame },
+                "reopening must preserve the last size and position")
         browser.floatingPlayer.close(returnTo: nil)
         #expect(await until(.seconds(2)) { await webView.requestMediaPlaybackState() != .playing })
     }

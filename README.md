@@ -169,7 +169,7 @@ time you use it. Toggle in Settings › Passwords › AutoFill.
     <td><img src="docs/screenshots/link-peek.webp" alt="Link Peek glass preview over a page"></td>
   </tr>
   <tr>
-    <td><b>Floating video</b>: leave a tab that's playing a video (including muted video) and the video pops out into a floating window you can drag and resize. Double-click it to go back to the tab. Rapid tab switches cancel outdated pop-out attempts.</td>
+    <td><b>Floating video</b>: leave a tab that's playing a video (including muted video) and the video pops out into a floating window you can drag and resize. Its size and position are remembered, even after restarting Browsi. Double-click it to go back to the tab. Rapid tab switches cancel outdated pop-out attempts.</td>
     <td><b>Link Peek</b>: ⇧-click a link to preview it in a glass window. ⌘↩ opens it as a tab, Esc closes it.</td>
   </tr>
   <tr>
