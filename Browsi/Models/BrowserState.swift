@@ -216,7 +216,8 @@ final class BrowserState {
         guard let space = space(of: tab) else { return }
         if tab.isPinned && !removePinned { unloadPinned(tab, in: space); return }
         if let url = tab.url { closedTabs.append((url, space.id)); closedTabs = closedTabs.suffix(30) }
-        let ordered = space.allTabs
+        // Closed pinned tiles stay in the sidebar, but must not be reopened as a fallback.
+        let ordered = space.allTabs.filter { $0 === tab || !$0.isPinned || !$0.isSuspended }
         let wasSelected = space.selectedTabID == tab.id
         let idx = ordered.firstIndex { $0 === tab } ?? 0
         // Pick the next tab *before* removing this one. Removing it first leaves `selectedTab` nil for one

@@ -157,6 +157,43 @@ struct PinnedAndHomeTabTests {
         #expect(browser.selectedTab == nil)
         #expect(browser.palette == .hidden)
     }
+
+    @Test func closingAllTabsDoesNotReopenPinnedTabs() {
+        let original = Preferences.shared.closeTabSelection
+        defer { Preferences.shared.closeTabSelection = original }
+
+        for selection in CloseTabSelection.allCases {
+            Preferences.shared.closeTabSelection = selection
+            let browser = BrowserState(library: LibraryStore(inMemory: true), restore: false)
+            let regular = browser.newTab(url: URL(string: "about:blank#regular"))
+            let pinned = browser.newTab(url: URL(string: "about:blank#pinned"))
+            browser.togglePin(pinned)
+
+            browser.closeSelectedTab()
+            #expect(browser.selectedTab === regular)
+            #expect(pinned.isSuspended)
+
+            browser.closeSelectedTab()
+            #expect(browser.selectedTab == nil)
+            #expect(browser.selectedSpace.tabs.isEmpty)
+            #expect(browser.selectedSpace.pinnedTabs.contains { $0 === pinned })
+            #expect(pinned.isSuspended, "closing the last regular tab must not reopen a pinned tile")
+            #expect(browser.palette == .hidden)
+        }
+    }
+
+    @Test func closingRegularTabStillSelectsOpenPinnedTab() {
+        let browser = BrowserState(library: LibraryStore(inMemory: true), restore: false)
+        let pinned = browser.newTab(url: URL(string: "about:blank#pinned"))
+        browser.togglePin(pinned)
+        let regular = browser.newTab(url: URL(string: "about:blank#regular"))
+
+        browser.close(regular)
+        #expect(browser.selectedTab === pinned)
+        browser.closeSelectedTab()
+        #expect(browser.selectedTab == nil)
+        #expect(pinned.isSuspended)
+    }
 }
 
 @MainActor

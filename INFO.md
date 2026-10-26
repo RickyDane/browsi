@@ -98,6 +98,7 @@ MainWindowView
 **Done:** everything listed under Features in the README; unit tests for the parser, palette ranking, keychain, blocker rules and suspension logic.
 
 **Notes:**
+- Closing tabs skips unloaded pinned tiles when choosing the next tab, falling back to Home when no open tabs remain.
 - Settings › Appearance offers 21 app icons in three switchable collections (Space, Exploration, Galaxy), with a current-icon summary, default reset and compact four-column grid. Collection 04 remains concept artwork only. Pulsar is the bundled icon and default preference; saved alternate choices remain unchanged and apply to the running app's Dock icon.
 - The default Dock icon is also applied explicitly from its image asset, avoiding stale macOS bundle-icon caches after updates.
 - Tab switches are deliberately un-animated: one persistent `WebViewHost` swaps web views, and `.transaction { $0.animation = nil }` keeps springs from leaking in.

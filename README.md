@@ -185,6 +185,7 @@ time you use it. Toggle in Settings › Passwords › AutoFill.
 Also:
 
 - **Middle-click** a link to open it in a background tab (⇧ for foreground); middle-click a tab to close it.
+- Closing the last open tab shows Home; unloaded pinned tiles stay pinned without reopening.
 - **Mouse thumb buttons** go back and forward.
 - **Sessions** (spaces and tabs) are restored on launch. History and bookmarks are stored with SwiftData.
 - **Performance**: only the visible tab is attached to the window. Idle tabs are suspended (snapshot and state
