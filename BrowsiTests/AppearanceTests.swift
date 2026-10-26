@@ -16,6 +16,21 @@ struct AppearanceTests {
         }
     }
 
+    @Test func bundleUsesTheNativeLayeredIcon() {
+        #expect(Bundle.main.object(forInfoDictionaryKey: "CFBundleIconName") as? String == "BrowsiIcon")
+        #expect(Bundle.main.url(forResource: "BrowsiIcon", withExtension: "icns") != nil)
+    }
+
+    @Test func everyAlternateAppliesItsRenderedImage() {
+        for icon in AppIconChoice.allCases where icon != .defaultChoice {
+            var applied: [NSImage?] = []
+            icon.apply(using: { applied.append($0) })
+            #expect(applied.count == 1)
+            #expect(applied[0] != nil)
+            #expect(applied[0]?.tiffRepresentation == icon.image?.tiffRepresentation)
+        }
+    }
+
     @Test func spaceIconsIncludePulsarAsDefault() {
         #expect(AppIconChoice.defaultChoice == .pulsar)
         let spaceIcons: [AppIconChoice] = [
@@ -29,16 +44,22 @@ struct AppearanceTests {
         #expect(AppIconChoice(rawValue: "nebulaSparkle") == .nebulaSparkle)
     }
 
-    @Test func defaultIconIsAppliedExplicitlyAfterSwitching() throws {
+    @Test func defaultIconRestoresNativeBundleAfterSwitching() {
         // AppKit's getter returns the bundle icon, not the last Dock override.
         // Capture what we send to the setter instead.
         var applied: [NSImage?] = []
         AppIconChoice.nebulaSparkle.apply(using: { applied.append($0) })
         AppIconChoice.defaultChoice.apply(using: { applied.append($0) })
-        let expected = try #require(AppIconChoice.pulsar.image)
         #expect(applied.count == 2)
         #expect(applied[0]?.tiffRepresentation == AppIconChoice.nebulaSparkle.image?.tiffRepresentation)
-        #expect(applied[1]?.tiffRepresentation == expected.tiffRepresentation)
+        #expect(applied[1] == nil)
+    }
+
+    @Test func defaultIconDoesNotOverrideNativeRenderingOnLaunch() {
+        var applied: [NSImage?] = []
+        AppIconChoice.defaultChoice.apply(using: { applied.append($0) })
+        #expect(applied.count == 1)
+        #expect(applied[0] == nil)
     }
 
     @Test func iconCollectionsCoverOnlyTheApprovedIcons() {

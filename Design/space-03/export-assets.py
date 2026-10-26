@@ -1,12 +1,10 @@
-"""Export collection 03 to alternate app image sets (requires Pillow)."""
+"""Exploration icon mapping and compatibility entry point for the native exporter."""
 
 from pathlib import Path
-
-from PIL import Image
+import runpy
 
 
 ROOT = Path(__file__).resolve().parent
-ASSETS = ROOT.parents[1] / 'Browsi/Resources/Assets.xcassets'
 ICONS = {
     'GravityB': '01-gravity-b',
     'NovaBloom': '02-nova-bloom',
@@ -20,12 +18,7 @@ ICONS = {
 
 
 def export():
-    for name, slug in ICONS.items():
-        with Image.open(ROOT / f'{slug}.png') as image:
-            target = ASSETS / f'AppIcon{name}.imageset'
-            for filename, size in [('icon.png', 512), ('icon@2x.png', 1024)]:
-                image.resize((size, size), Image.Resampling.LANCZOS).save(target / filename)
-    print('Exported all eight collection 03 icons; Pulsar is unchanged.')
+    runpy.run_path(str(ROOT.parent / 'export-native-icons.py'), run_name='__main__')
 
 
 if __name__ == '__main__':

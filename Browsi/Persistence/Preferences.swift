@@ -91,9 +91,10 @@ enum AppIconChoice: String, CaseIterable, Identifiable {
     }
     var image: NSImage? { NSImage(named: assetName) }
 
-    /// Apply even the default explicitly: macOS may cache an older bundle icon after an update.
+    /// nil restores the native layered bundle icon, including macOS material effects.
+    /// Alternates use Icon Composer exports because the Dock override takes NSImage.
     func apply(using setImage: (NSImage?) -> Void = { NSApp?.applicationIconImage = $0 }) {
-        setImage(image)
+        setImage(self == Self.defaultChoice ? nil : image)
     }
 }
 

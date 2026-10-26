@@ -25,6 +25,7 @@ python3 Design/space-02/make.py
 Requires Python 3 and `rsvg-convert` (Homebrew: `brew install librsvg`).
 Artwork is deterministic and self-contained; no downloaded assets or fonts.
 
-After regenerating the PNGs, run `python3 Design/space-02/export-assets.py`
-to refresh the eight Settings image sets and the Pulsar bundle icon. This step
-requires Pillow and uses the existing asset catalog manifests.
+Run `python3 Design/export-native-icons.py` to refresh the layered Pulsar bundle
+icon and all 21 Settings/Dock image sets from the SVGs. Requires Xcode's Icon
+Composer, rsvg-convert and Pillow. The collection export script delegates to it.
+Concept PNGs retain their original tile; shipped icons use the native enclosure.

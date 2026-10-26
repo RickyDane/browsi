@@ -1,0 +1,46 @@
+{
+  "fill": {
+    "solid": "srgb:0.03,0.05,0.1,1"
+  },
+  "groups": [
+    {
+      "layers": [
+        {
+          "image-name": "Artwork.png",
+          "name": "Artwork"
+        }
+      ],
+      "specular": true,
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.25
+      },
+      "translucency": {
+        "enabled": false,
+        "value": 0
+      }
+    },
+    {
+      "layers": [
+        {
+          "image-name": "Background.png",
+          "name": "Background"
+        }
+      ],
+      "specular": false,
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0
+      },
+      "translucency": {
+        "enabled": false,
+        "value": 0
+      }
+    }
+  ],
+  "supported-platforms": {
+    "squares": [
+      "macOS"
+    ]
+  }
+}

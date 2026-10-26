@@ -213,7 +213,7 @@ Also:
 - **Settings**: a System-Settings-style window with about 40 options across General, Appearance, Tabs & Spaces,
   Privacy & Security, Passwords, Websites, Downloads and Advanced.
 
-- **App icons**: Settings › Appearance shows your current icon, a default reset, and compact Space, Exploration and Galaxy collections with 21 icons in total. Pulsar is the default; existing saved choices are kept. Alternate choices change the running app's Dock icon.
+- **App icons**: Settings › Appearance shows your current icon, a default reset, and compact Space, Exploration and Galaxy collections with 21 icons in total. Pulsar uses a native layered macOS icon with Liquid Glass highlights; existing saved choices are kept. Alternate choices change the running app's Dock icon using static renders with the matching native shape and finish.
 
 ## Privacy, passwords & extensions
 

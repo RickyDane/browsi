@@ -28,6 +28,6 @@ Requires Python 3 and `rsvg-convert` (`brew install librsvg`). Output is
 deterministic; artwork uses no downloaded assets or fonts. Keep the PNGs beside
 `sheet.svg` when sharing the vector sheet, as its small-size previews link to them.
 
-After regenerating the PNGs, run `python3 Design/space-03/export-assets.py`
-from the repository root to refresh the eight app image sets. This requires
-Pillow and does not change the bundled Pulsar icon.
+Run `python3 Design/export-native-icons.py` to refresh all 21 native-shaped app
+image sets and the layered Pulsar bundle icon. Requires Xcode's Icon Composer,
+rsvg-convert and Pillow. The collection export script delegates to it.
