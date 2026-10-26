@@ -10,7 +10,7 @@
 | Engine | `WKWebView` (one per live tab) |
 | Storage | SwiftData (history, bookmarks), JSON (session), UserDefaults (prefs), Keychain (passwords) |
 | Project | XcodeGen (`project.yml`), bundle id `dev.perlick.browsi`, sandboxed, hardened runtime |
-| Tests | Swift Testing in `BrowsiTests/` (16 tests) |
+| Tests | Swift Testing in `BrowsiTests/` |
 
 ## Architecture
 
@@ -57,7 +57,7 @@ MainWindowView
 | `Web/SmartRenamer.swift` | Foundation Models (`@Generable SmartFileName`) download renaming; PDF/text snippets via PDFKit; pure sanitising helpers. |
 | `Passwords/PasskeySupport.swift` | Checks the browser passkey entitlement (`SecTask`) and drives `ASAuthorizationWebBrowserPublicKeyCredentialManager` authorization. WebKit performs the WebAuthn ceremonies. |
 | `Web/LoginImpactBridge.swift` | Isolated-world detector for trusted clicks on "Sign in with Apple" / passkey buttons (EN + DE patterns). |
-| `UI/Effects/ImpactOverlay.swift` + `Ripple.metal` | Wave-impact: `browsiRipple` layer shader over a page snapshot, Canvas rings/sparks/flash, `ImpactShake` keyframes. |
+| `UI/Effects/CalmRipple.swift`, `NativeCipher.swift`, `Ripple.metal` | Native Cipher: one fast click-origin impact at 10% depth over a temporary page snapshot. White 3×3 cipher dots (72% opacity) and a 30% darkening layer hold on the live page during authentication, then fade without another wave. Page-scoped, below sign-in sheets; rendering pauses once settled. |
 | `Config/Signing.xcconfig` | Default ad-hoc signing; includes optional git-ignored `Signing.local.xcconfig` for team + passkey entitlement. |
 | `Home/HomeView.swift` | Home page: clock, AI search bar + answer card, draggable/resizable module grid with live reflow preview. |
 | `Home/GridLayout.swift` | Pure 12-column grid engine: push-down on overlap + vertical compaction (unit tested). |
@@ -104,6 +104,7 @@ MainWindowView
 - Settings › Appearance offers 21 app icons in three switchable collections (Space, Exploration, Galaxy), with a current-icon summary, default reset and compact four-column grid. Collection 04 remains concept artwork only. Pulsar is the bundled icon and default preference; saved alternate choices remain unchanged and apply to the running app's Dock icon.
 - The default Dock icon is also applied explicitly from its image asset, avoiding stale macOS bundle-icon caches after updates.
 - Tab switches are deliberately un-animated: one persistent `WebViewHost` swaps web views, and `.transaction { $0.animation = nil }` keeps springs from leaking in.
+- Native Cipher briefly covers the live page with an in-memory snapshot for its Metal warp, then discards it. If WebKit cannot provide a snapshot, the transparent grid still works. Reduce Motion skips the snapshot, warp, and travelling dots in favor of a faint neutral fade. Authenticator/Apple-sheet completion releases the grid; unmatched clicks and a safety timeout also clean it up.
 - The traffic lights fade out while the sidebar is collapsed and return when it is shown or peeked.
 - Many web settings (JS, autoplay, pop-ups, HTTPS upgrade, fraud warnings, min font, zoom, inspector) apply to newly created tabs.
 

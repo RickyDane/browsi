@@ -1,4 +1,6 @@
 body[data-study=gravity] #surface{cursor:crosshair}
+body[data-study=digital] #surface{cursor:crosshair}
+body[data-study=digital] .directions{grid-template-columns:repeat(4,minmax(0,1fr))}
 .origin-marker{position:absolute;z-index:4;width:11px;height:11px;border:1px solid #d8efb4;border-radius:50%;pointer-events:none;transform:translate(-50%,-50%);opacity:0;box-shadow:0 0 0 4px #10190d66;transition:opacity .4s}
 .origin-marker.visible{opacity:.9}
 .origin-marker:before,.origin-marker:after{content:"";position:absolute;background:#d8efb4;opacity:.7}

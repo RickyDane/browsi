@@ -10,7 +10,8 @@ struct AppleSignInSheet: View {
     var body: some View {
         let tab = sheet.tab
         ZStack {
-            Color.black.opacity(0.32)
+            // Native Cipher already darkens the page by 30%; don't stack another dimming veil.
+            Color.black.opacity(browser.calmRipple?.tabID == sheet.source.id ? 0 : 0.32)
                 .ignoresSafeArea()
                 .contentShape(Rectangle())
                 .onTapGesture {}   // the page underneath stays inert while signing in

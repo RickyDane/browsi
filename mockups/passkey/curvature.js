@@ -1,13 +1,22 @@
 'use strict';
 
 const $ = selector => document.querySelector(selector);
-const gravityStudy = document.body.dataset.study === 'gravity';
-const concepts = gravityStudy ? [
-  { name: 'Quiet Tide', description: 'The closest revision to the original Gravity Well. One restrained ripple travels from your click, laying down a smooth, quiet basin.', geometry: 'A narrow raised wavefront carries the bend outward. Pixels ahead of it remain exactly flat; those behind it gently settle into the click-centered well.' },
-  { name: 'Twin Ripple', description: 'A second, smaller ripple follows the first. A subtle double beat makes the interaction feel deliberate without making the entire page oscillate.', geometry: 'Two separated geometric crests travel outward from the same click. The second follows 420 milliseconds later; both resolve into one steady gravity well.' },
+const digitalStudy = document.body.dataset.study === 'digital';
+const gravityStudy = document.body.dataset.study === 'gravity' || digitalStudy;
+const concepts = digitalStudy ? [
+  { name: 'Radial Lattice', description: 'A fine square lattice unfurls behind the Undertow wave. Quiet intersection points give it a precise, digital character without turning it into visual noise.', geometry: 'The click emits a circular reveal front. Grid lines and tiny nodes appear behind it, follow the travelling warp, and then rest on the flattened page until the demo dialog closes.' },
+  { name: 'Folded Tiles', description: 'Individual wireframe cells open like tiny hinged panels. A more tactile, architectural interpretation of an unfolding digital layer.', geometry: 'Each cell opens from a narrow central seam to a complete square when the wave reaches it. The staggered hinges become an ordered field of separated tiles during authentication.' },
+  { name: 'Circuit Bloom', description: 'A network of right-angle paths branches from the click. Small junction nodes make the page feel temporarily connected to a digital authentication plane.', geometry: 'A stepped, Manhattan-distance reveal grows through the network. Sparse elbows and illuminated nodes replace a uniform grid; the completed circuitry stays still while the dialog is open.' },
+  { name: 'Hex Field', description: 'A fine honeycomb tessellation grows over the page. More organic than a square grid, but still distinctly computational.', geometry: 'Hexagonal cells assemble outward from the click, with a brighter leading edge. The mesh bends with Deep Undertow, settles flat, and remains as a quiet authentication texture.' },
+  { name: 'Scan Weave', description: 'Horizontal scanlines unfold first; vertical threads weave through them a moment later. Two directional passes build one persistent digital fabric.', geometry: 'Rows expand vertically away from the click, followed by columns spreading horizontally. Their crossings form bright, precise stitches; the woven grid remains until dismissal.' },
+  { name: 'Dotted Atmosphere', description: 'A quiet field of small slate dots over a soft blue, lilac, and teal wash. Inspired by the Beyond Over staging background: no connecting lines, no flickering symbols.', geometry: 'The dots use the reference’s 22-pixel spacing and 1.4-pixel radius. They gently grow into view as Deep Undertow passes, then remain completely still until the demo dialog closes.' },
+  { name: 'Native Cipher', description: 'White cipher-dot clusters over a fine background grid. One brief click-origin impact sends a single travelling warp across the page—no second ripple.', geometry: 'The native 12-point cipher cells, three-by-three subdots, and five-point grid remain. A single impulse reveals the white dots; the impact rebounds, and the overlay stays still until dismissal.' }
+] : gravityStudy ? [
+  { name: 'Quiet Tide', description: 'One restrained impulse starts at your click. A smooth ripple carries the curvature outward, leaving no lasting dent at the source.', geometry: 'A narrow crest and a soft trough travel together. Each point briefly bends as they pass, then returns to its original position—even while the wave is still crossing the page.' },
+  { name: 'Twin Ripple', description: 'A second, smaller ripple follows the first. A subtle double beat makes the interaction feel deliberate without leaving the page pressed down.', geometry: 'Two separated geometric crests travel outward from the same click. The second follows 420 milliseconds later; both dissipate, restoring a completely flat page.' },
   { name: 'Elastic Wake', description: 'The website behaves like a flexible membrane. The wave leaves a small, damped rebound behind it before the page becomes still.', geometry: 'Each point begins moving only when the wave reaches it. A local spring-like oscillation decays independently behind the travelling front.' },
-  { name: 'Raised Rim', description: 'A more sculptural take. A pronounced lip rises around the advancing well, making the travelling curvature unmistakable.', geometry: 'A positive crest pushes the mesh upward and outward just before the concave basin arrives. The page texture and its shading follow the actual displaced geometry.' },
-  { name: 'Deep Undertow', description: 'First a light ripple, then a slower, deeper pull. The two-stage descent gives the well more weight and a slightly more cinematic pace.', geometry: 'The first front forms a shallow basin. A broad second front arrives 620 milliseconds later and draws the already-curved surface deeper into the same well.' }
+  { name: 'Raised Rim', description: 'A more sculptural impulse. A pronounced lip rises ahead of a travelling depression, making the curvature unmistakable without pinning the impact point down.', geometry: 'A positive crest pushes the mesh upward and outward, followed by a temporary trough. Both move away from the click; the surface immediately begins recovering behind them.' },
+  { name: 'Deep Undertow', description: 'First a light ripple, then a deeper passing pull. The two-stage pulse gives the wave more weight, but the impact point still recovers.', geometry: 'A broad second trough follows 620 milliseconds behind the first impulse. It travels across the page instead of forming a permanent basin; every point returns to flat.' }
 ] : [
   { name: 'Gravity Well', category: 'Attraction', description: 'Authentication acquires mass. The website sinks into a deep, smooth basin while the prompt stays suspended above it.', geometry: 'Text, images, rules, and the window edges follow a concave 3D surface. Perspective compresses the center; directional shading makes the depth tangible.' },
   { name: 'Orbital Shear', category: 'Torsion', description: 'The page twists around the sign-in point, as if the surrounding space has been gently rotated. A controlled torsion, not a spinning overlay.', geometry: 'The actual website texture is carried around a localized vortex. The center recedes into depth while the outer edges stay comparatively anchored.' },
@@ -21,12 +30,14 @@ const stage = $('#stage');
 const prompt = $('#prompt');
 const reducedPreference = matchMedia('(prefers-reduced-motion: reduce)');
 $('#reduced').checked = reducedPreference.matches;
-let mode = 0;
+let mode = digitalStudy ? ({ '#dots': 5, '#cipher': 6 }[location.hash] ?? 0) : 0;
 let method = 'passkey';
 let phase = 'idle';
 let started = 0;
 let releaseStart = 0;
 let releaseAmount = 0;
+let overlayAmount = 0;
+let releaseOverlayAmount = 0;
 let amount = 0;
 // Default source: the center of the fictional page's sign-in button, in texture UV coordinates.
 let origin = [.836, .795];
@@ -52,7 +63,12 @@ varying float vLight;
 varying float vWave;
 float crest(float local, float delay, float band) {
   float x = (local-delay)/band;
-  return exp(-x*x) * smoothstep(0.0,.18,age);
+  float cutoff = 1.0-smoothstep(2.0,3.0,abs(x));
+  return exp(-x*x) * cutoff * smoothstep(0.0,.055,local) * smoothstep(0.0,.18,age);
+}
+float impulse(float local) {
+  // Each point recovers locally; the source does not remain pinned until the wave ends.
+  return smoothstep(0.0,.19,local) * (1.0-smoothstep(.34,1.10,local));
 }
 vec3 gravitySurface(vec2 p) {
   vec2 center = (origin-.5)*2.0*vec2(aspect,1.0);
@@ -60,23 +76,25 @@ vec3 gravitySurface(vec2 p) {
   float r = length(q);
   float local = age-r/1.15;
   float arrived = smoothstep(0.0,.34,local);
+  float pulse = impulse(local);
   float basin = exp(-dot(q,q)*.64);
   float wave = .14*crest(local,.12,.13);
-  float sink = .98*arrived;
+  float sink = .98*pulse;
   if (mode > .5 && mode < 1.5) {
     wave += .10*crest(local,.54,.12);
   } else if (mode > 1.5 && mode < 2.5) {
-    wave += .23*arrived*basin*sin(max(0.0,local)*10.0)*exp(-max(0.0,local)*1.8);
+    float decay = exp(-max(0.0,local)*1.8) * (1.0-smoothstep(1.2,2.2,local));
+    wave += .23*arrived*basin*sin(max(0.0,local)*10.0)*decay;
   } else if (mode > 2.5 && mode < 3.5) {
     wave = .34*crest(local,.14,.19);
     p += q/max(r,.02)*wave*.11*amount;
-    sink = 1.06*arrived;
+    sink = 1.06*pulse;
   } else if (mode > 3.5) {
-    float second = smoothstep(0.0,.70,local-.62);
-    sink = .44*arrived+.68*second;
+    float second = impulse(local-.62);
+    sink = .44*pulse+.68*second;
     wave -= .17*crest(local,.85,.27);
   }
-  p -= q*(.13*amount*arrived*basin);
+  p -= q*(.13*amount*pulse*basin);
   return vec3(p, amount*(-sink*basin+wave));
 }
 vec3 surface(vec2 p) {
@@ -134,9 +152,100 @@ const fragmentSource = `
 precision mediump float;
 uniform sampler2D page;
 uniform float grid, amount;
+uniform float digital, overlayMode, overlayAlpha, age, aspect, surfaceHeight;
+uniform vec2 origin;
 varying vec2 vUV;
 varying float vLight;
 varying float vWave;
+float hash(vec2 p) { return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
+float cipherHash(vec2 p) {
+  // Preserve the native shader's fractional hash without mediump rounding it to zero.
+  #ifdef GL_FRAGMENT_PRECISION_HIGH
+  highp vec2 hp = p;
+  return fract(sin(dot(hp,vec2(127.1,311.7)))*43758.5453);
+  #else
+  vec3 q = fract(vec3(p.xyx)*.1031);
+  q += dot(q,q.yzx+3.33);
+  return fract((q.x+q.y)*q.z);
+  #endif
+}
+float thin(float d, float w) { return 1.0-smoothstep(w,w+.025,abs(d)); }
+vec2 digitalField() {
+  vec2 metric = vec2(aspect,1.0);
+  vec2 p = vUV*metric*18.0;
+  vec2 id = floor(p);
+  vec2 f = fract(p)-.5;
+  float t = max(0.0,age-.40);
+  float r = length((vUV-origin)*metric)*2.0;
+  float reveal = smoothstep(0.0,.4,t-r/1.15);
+  float lines = max(thin(.5-abs(f.x),.012),thin(.5-abs(f.y),.012));
+  float node = 1.0-smoothstep(.045,.075,length(fract(p+.5)-.5));
+  float ink = max(lines*.65,node*.9);
+  if (overlayMode > .5 && overlayMode < 1.5) {
+    p = vUV*metric*10.0;
+    id = floor(p); f = fract(p)-.5;
+    vec2 center = (id+.5)/(metric*10.0);
+    float arrival = length((center-origin)*metric)*2.0/1.15;
+    float opened = smoothstep(0.0,.65,t-arrival-hash(id)*.16);
+    float hinge = .43*sin(opened*1.5707963);
+    float horizontal = thin(abs(f.y)-hinge,.009)*step(abs(f.x),.43);
+    float vertical = thin(abs(f.x)-.43,.009)*step(abs(f.y),hinge);
+    ink = max(horizontal,vertical)*.85*opened;
+    reveal = opened;
+  } else if (overlayMode > 1.5 && overlayMode < 2.5) {
+    float manhattan = dot(abs((vUV-origin)*metric),vec2(1.0))*2.0;
+    reveal = smoothstep(0.0,.4,t-manhattan/1.65);
+    float horizontal = thin(f.y,.012)*step(f.x,.15);
+    float vertical = thin(f.x-.15,.012)*step(-.02,f.y)*step(.35,hash(id));
+    float junction = 1.0-smoothstep(.055,.085,length(f-vec2(.15,0.0)));
+    ink = max(max(horizontal,vertical)*.8,junction);
+  } else if (overlayMode > 2.5 && overlayMode < 3.5) {
+    vec2 hp = vUV*metric*19.0;
+    vec2 cellSize = vec2(1.7320508,3.0);
+    vec2 a = mod(hp,cellSize)-cellSize*.5;
+    vec2 b = mod(hp+cellSize*.5,cellSize)-cellSize*.5;
+    vec2 h = dot(a,a)<dot(b,b) ? a : b;
+    float edge = max(abs(h.x),abs(h.x)*.5+abs(h.y)*.8660254);
+    ink = thin(edge-.8660254,.015)*.85;
+    float rim = exp(-pow((t-r/1.15-.12)/.16,2.0));
+    ink = min(1.0,ink*(1.0+rim));
+  } else if (overlayMode > 3.5 && overlayMode < 4.5) {
+    float rows = smoothstep(0.0,.45,t-abs(vUV.y-origin.y)*2.0/.8);
+    float columns = smoothstep(0.0,.45,t-.65-abs(vUV.x-origin.x)*aspect*2.0/1.15);
+    float horizontal = thin(.5-abs(f.y),.012)*rows;
+    float vertical = thin(.5-abs(f.x),.012)*columns;
+    ink = max(horizontal*.65,vertical*.65);
+    ink = max(ink,node*rows*columns);
+    reveal = max(rows,columns);
+    return vec2(ink,reveal);
+  } else if (overlayMode > 4.5 && overlayMode < 5.5) {
+    // Reference: 22px grid, 1.4px slate dots. Use CSS pixels, not backing-store pixels.
+    vec2 pixelSize = metric*surfaceHeight*.83;
+    vec2 dots = vUV*pixelSize/22.0;
+    vec2 center = (floor(dots)+.5)*22.0/pixelSize;
+    float arrival = length((center-origin)*metric)*2.0/1.15;
+    float opened = smoothstep(0.0,.35,t-arrival);
+    float distanceToDot = length((fract(dots)-.5)*22.0);
+    ink = (1.0-smoothstep(max(0.0,1.4*opened-.25),1.4*opened+.25,distanceToDot))*opened;
+    return vec2(ink,reveal);
+  } else if (overlayMode > 5.5) {
+    // Match Browsi/UI/Effects/Ripple.metal: 12pt cells containing 3×3 cipher dots.
+    vec2 position = vUV*metric*surfaceHeight*.83;
+    vec2 cellID = floor(position/12.0);
+    vec2 lp = fract(position/12.0)*3.0;
+    vec2 sub = floor(lp);
+    float arrival = r/1.15;
+    float tick = floor(min(t,arrival+.9)*3.0+cipherHash(cellID)*10.0);
+    float bit = step(.45,cipherHash(cellID*1.31+sub*7.17+tick));
+    float dotMask = 1.0-smoothstep(.26,.36,length(fract(lp)-.5));
+    vec2 fine = abs(fract(position/5.0)-.5)*5.0;
+    float edge = 1.0-smoothstep(0.0,.9,2.5-max(fine.x,fine.y));
+    float front = exp(-pow((t-arrival-.2)/.26,2.0));
+    ink = bit*dotMask*(.55+.4*front)+edge*.10;
+    return vec2(min(1.0,ink)*reveal,reveal);
+  }
+  return vec2(ink*reveal,reveal);
+}
 void main() {
   vec4 color = texture2D(page,vUV);
   vec2 cell = abs(fract(vUV*vec2(30.0,20.0))-.5);
@@ -144,6 +253,26 @@ void main() {
   vec3 rgb = color.rgb * mix(1.0,vLight,amount);
   rgb = mix(rgb, vec3(.26,.52,.45), line*grid*.26);
   rgb = mix(rgb, vec3(.81,.93,.67), clamp(vWave*amount*.17,0.0,.35));
+  if (digital > .5) {
+    vec2 field = digitalField();
+    if (overlayMode > 5.5) {
+      rgb = mix(rgb,vec3(.045,.055,.085),field.y*overlayAlpha*.30);
+      rgb = mix(rgb,vec3(1.0),field.x*overlayAlpha*.72);
+    } else if (overlayMode > 4.5) {
+      float blue = exp(-dot((vUV-vec2(.4,.85))*vec2(1.2,1.0),(vUV-vec2(.4,.85))*vec2(1.2,1.0))*5.0);
+      float lilac = exp(-dot(vUV-vec2(.9,.4),vUV-vec2(.9,.4))*6.0);
+      float teal = exp(-dot(vUV-vec2(.1,.1),vUV-vec2(.1,.1))*6.0);
+      vec3 wash = vec3(.94,.96,.98);
+      wash = mix(wash,vec3(.79,.88,.98),blue*.65);
+      wash = mix(wash,vec3(.88,.85,.97),lilac*.45);
+      wash = mix(wash,vec3(.80,.93,.92),teal*.40);
+      rgb = mix(rgb,wash,field.y*overlayAlpha*.46);
+      rgb = mix(rgb,vec3(.39216,.45490,.54510),field.x*overlayAlpha*.32);
+    } else {
+      rgb = mix(rgb,vec3(.025,.075,.06),field.y*overlayAlpha*.38);
+      rgb = mix(rgb,vec3(.22,.76,.61),field.x*overlayAlpha*.70);
+    }
+  }
   gl_FragColor = vec4(rgb,color.a);
 }`;
 
@@ -166,7 +295,7 @@ function initGL() {
   gl.linkProgram(program);
   if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(program));
   gl.useProgram(program);
-  uniforms = Object.fromEntries(['aspect', 'amount', 'mode', 'grid', 'page', 'study', 'age', 'origin'].map(name => [name, gl.getUniformLocation(program, name)]));
+  uniforms = Object.fromEntries(['aspect', 'amount', 'mode', 'grid', 'page', 'study', 'age', 'origin', 'digital', 'overlayMode', 'overlayAlpha', 'surfaceHeight'].map(name => [name, gl.getUniformLocation(program, name)]));
   const vertices = [];
   const columns = 120, rows = 80;
   for (let y = 0; y < rows; y++) {
@@ -284,7 +413,9 @@ function waveDuration() {
   const a=width/height;
   const farX=2*a*Math.max(origin[0],1-origin[0]);
   const farY=2*Math.max(origin[1],1-origin[1]);
-  return Math.hypot(farX,farY)/1.15 + (mode===2 ? 2.4 : 1.65);
+  const propagation = Math.hypot(farX,farY)/1.15;
+  const weave = Math.max(farY/.8,farX/1.15+.65)+1.0;
+  return Math.max(propagation+2.3,digitalStudy ? weave : 0);
 }
 
 function updateOriginMarker(visible) {
@@ -299,38 +430,55 @@ function render(now) {
   raf = 0;
   if (!gl || contextLost) return;
   const reduced = $('#reduced').checked;
-  const speed = $('#slow').checked ? 2.5 : 1;
+  // The digital studies run 35% shorter; Slow remains available for inspecting the surface.
+  const speed = $('#slow').checked ? 2.5 : digitalStudy ? .65 : 1;
   if (phase === 'enter') {
     const elapsed = (now-started)/1000/speed;
     const duration=gravityStudy ? waveDuration() : 1.65;
     waveAge=elapsed;
     // The travelling arrival mask controls the bend locally, not a full-page opacity/scale ramp.
     amount = gravityStudy ? smooth(elapsed/.12) : smooth(elapsed/1.65);
+    overlayAmount = smooth((elapsed-.40)/.4);
     setPrompt(elapsed > .72 || reduced);
     if (gravityStudy) {
       updateOriginMarker(elapsed<.7);
       $('#wave-progress').style.width=Math.min(100,elapsed/duration*100)+'%';
     }
-    if (elapsed >= duration || reduced) { phase='hold'; amount=1; status('Holding space · awaiting authentication'); }
+    if (elapsed >= duration || reduced) {
+      phase='hold'; amount=gravityStudy ? 0 : 1;
+      overlayAmount=1;
+      if (gravityStudy) $('#wave-progress').style.width='100%';
+      status(digitalStudy ? 'Grid holding · close the dialog to clear' : gravityStudy ? 'Page settled · awaiting authentication' : 'Holding space · awaiting authentication');
+    }
   } else if (phase === 'release') {
     const elapsed = (now-releaseStart)/1000/speed;
     amount = releaseAmount*(1-smooth(elapsed/1.35));
-    if (elapsed >= 1.35 || reduced) { phase='idle'; amount=0; status('Space restored · no sign-in performed'); }
+    overlayAmount=releaseOverlayAmount*(1-smooth(elapsed/.75));
+    if (elapsed >= 1.35 || reduced) { phase='idle'; amount=0; overlayAmount=0; status('Space restored · no sign-in performed'); }
   }
   stage.classList.toggle('reduced', reduced);
   gl.clear(gl.COLOR_BUFFER_BIT);
   gl.uniform1f(uniforms.aspect, width/height);
-  gl.uniform1f(uniforms.mode, mode);
+  gl.uniform1f(uniforms.surfaceHeight, height);
+  // Native Cipher uses one impulse; keep Deep Undertow's delayed second pulse in the other studies.
+  gl.uniform1f(uniforms.mode, digitalStudy ? (mode===6 ? 0 : 4) : mode);
+  gl.uniform1f(uniforms.digital, digitalStudy ? 1 : 0);
+  gl.uniform1f(uniforms.overlayMode, mode);
+  gl.uniform1f(uniforms.overlayAlpha, $('#grid').checked ? overlayAmount : 0);
   gl.uniform1f(uniforms.study, gravityStudy ? 1 : 0);
-  gl.uniform1f(uniforms.age, waveAge);
+  gl.uniform1f(uniforms.age, reduced ? 100 : waveAge);
   gl.uniform2f(uniforms.origin, origin[0], origin[1]);
   gl.uniform1f(uniforms.amount, reduced ? 0 : amount*Number($('#depth').value)/75);
-  gl.uniform1f(uniforms.grid, $('#grid').checked ? 1 : 0);
+  gl.uniform1f(uniforms.grid, !digitalStudy && $('#grid').checked ? 1 : 0);
   gl.drawArrays(gl.TRIANGLES, 0, vertexCount);
   // Expose only non-sensitive render diagnostics for the local prototype's browser checks.
   canvas.dataset.mode = String(mode);
   canvas.dataset.deformation = String(reduced ? 0 : amount*Number($('#depth').value)/75);
   canvas.dataset.phase = phase;
+  if (digitalStudy) {
+    canvas.dataset.overlay=String($('#grid').checked ? overlayAmount : 0);
+    canvas.dataset.geometry=mode===6 ? 'Single impact' : 'Deep Undertow';
+  }
   if (gravityStudy) {
     canvas.dataset.origin=origin.join(',');
     canvas.dataset.waveAge=String(waveAge);
@@ -340,18 +488,24 @@ function render(now) {
 
 function play() {
   if (!gl || contextLost) return;
-  phase='enter'; started=performance.now(); amount=0; waveAge=0; setPrompt(false);
+  phase='enter'; started=performance.now(); amount=0; waveAge=0; overlayAmount=0; setPrompt(false);
   if (gravityStudy) $('#wave-progress').style.width='0%';
   $('#release').disabled=false; status(gravityStudy ? 'Ripple travelling from click' : 'Deforming the page'); requestFrame();
 }
 function release() {
   if (!gl || contextLost) return;
-  phase='release'; releaseStart=performance.now(); releaseAmount=amount; setPrompt(false);
+  phase='release'; releaseStart=performance.now(); releaseAmount=amount; releaseOverlayAmount=overlayAmount; setPrompt(false);
   updateOriginMarker(false);
   $('#release').disabled=true; status('Releasing curvature'); requestFrame();
 }
 function select(next) {
   mode=next;
+  if (digitalStudy) {
+    $('#depth').value=mode===6 ? '10' : '75';
+    $('#depth-value').textContent=$('#depth').value+'%';
+    $('#depth-readout').textContent='CURVATURE '+$('#depth').value.padStart(3,'0');
+  }
+  if (digitalStudy) history.replaceState(null,'',mode===5 ? '#dots' : mode===6 ? '#cipher' : '#grid-'+(mode+1));
   const concept=concepts[mode];
   document.querySelectorAll('[data-mode]').forEach(button=>button.setAttribute('aria-pressed', String(Number(button.dataset.mode)===mode)));
   $('#stage-name').textContent=`0${mode+1} — ${concept.name.toUpperCase()}`;
@@ -363,6 +517,10 @@ function select(next) {
 }
 
 document.querySelectorAll('[data-mode]').forEach(button=>button.addEventListener('click',()=>select(Number(button.dataset.mode))));
+if (digitalStudy) window.addEventListener('hashchange',()=>{
+  const next = { '#dots': 5, '#cipher': 6 }[location.hash];
+  if (next !== undefined && next !== mode) select(next);
+});
 document.querySelectorAll('[data-method]').forEach(button=>button.addEventListener('click',()=>{
   method=button.dataset.method;
   document.querySelectorAll('[data-method]').forEach(other=>other.setAttribute('aria-pressed',String(other===button)));

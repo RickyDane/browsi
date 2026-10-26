@@ -68,7 +68,7 @@ final class BrowserState {
     var downloadsBounce = 0
     @ObservationIgnored private var lastClick: (point: CGPoint, time: Date)?
     @ObservationIgnored private var clickMonitor: Any?
-    /// Calm full-window ripple (passkey sign-in).
+    /// Page-scoped Native Cipher authentication treatment.
     var calmRipple: CalmRipple?
 
     let library: LibraryStore
@@ -571,21 +571,37 @@ final class BrowserState {
     /// Passkey requests currently being handled by Browsi's authenticator.
     @ObservationIgnored private var activePasskeyCeremonies = 0
 
-    /// Cipher-grid wave across the whole window from the clicked passkey button. The grid holds while
-    /// the passkey prompt is open and clears when it finishes (see `passkeyCeremony(started:)`).
+    /// One shallow page impact with a white grid that holds for the authentication ceremony.
     func playCalmRipple(at pagePoint: CGPoint, in webView: WKWebView) {
-        guard let content = webView.window?.contentView else { return }
+        guard let content = webView.window?.contentView,
+              let tab = selectedTab, tab.controller?.webView === webView else { return }
         // Page coordinates (top-left) → window content coordinates (top-left).
         let flippedY = webView.isFlipped ? pagePoint.y : webView.bounds.height - pagePoint.y
         var p = webView.convert(CGPoint(x: pagePoint.x, y: flippedY), to: content)
         if !content.isFlipped { p.y = content.bounds.height - p.y }
-        let ripple = CalmRipple(origin: p, tint: selectedSpace.color)
+        let ripple = CalmRipple(origin: p, tabID: tab.id, pageOrigin: pagePoint)
         calmRipple = ripple
-        NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
+        if !Motion.reduceMotion {
+            NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
+            Task { [weak self, weak webView] in
+                guard let self, let webView else { return }
+                let configuration = WKSnapshotConfiguration()
+                configuration.afterScreenUpdates = false
+                let snapshot = try? await webView.takeSnapshot(configuration: configuration)
+                guard calmRipple?.id == ripple.id, selectedTab?.id == tab.id,
+                      Date().timeIntervalSince(ripple.start) < NativeCipher.settlingDuration(origin: pagePoint, size: webView.bounds.size) else { return }
+                calmRipple?.snapshot = snapshot
+                do {
+                    let duration = NativeCipher.settlingDuration(origin: pagePoint, size: webView.bounds.size)
+                    try await Task.sleep(for: .seconds(max(0, duration - Date().timeIntervalSince(ripple.start))))
+                    if calmRipple?.id == ripple.id { calmRipple?.snapshot = nil }
+                } catch { /* The effect was replaced. */ }
+            }
+        }
         Task {
             // The button may not start a passkey request at all; then don't hold the grid.
             try? await Task.sleep(for: .seconds(CalmRipple.requestGrace))
-            if calmRipple?.id == ripple.id, activePasskeyCeremonies == 0 { releaseCalmRipple() }
+            if calmRipple?.id == ripple.id, activePasskeyCeremonies == 0, appleSignIn == nil { releaseCalmRipple() }
             try? await Task.sleep(for: .seconds(CalmRipple.maximumHold))
             if calmRipple?.id == ripple.id { releaseCalmRipple() }
         }
@@ -594,10 +610,10 @@ final class BrowserState {
     /// Called when Browsi's passkey authenticator starts / finishes a request.
     func passkeyCeremony(started: Bool) {
         activePasskeyCeremonies = max(0, activePasskeyCeremonies + (started ? 1 : -1))
-        if !started, activePasskeyCeremonies == 0 { releaseCalmRipple() }
+        if !started, activePasskeyCeremonies == 0, appleSignIn == nil { releaseCalmRipple() }
     }
 
-    /// Lets the grid clear outward, then removes the overlay.
+    /// Fades the grid without triggering another impact or clearing ripple.
     func releaseCalmRipple() {
         guard let ripple = calmRipple, ripple.release == nil else { return }
         let at = max(Date(), ripple.start.addingTimeInterval(CalmRipple.minimumHold))
@@ -659,6 +675,7 @@ final class BrowserState {
     func endAppleSignIn() {
         guard let sheet = appleSignIn else { return }
         withAnimation(Motion.snappy) { appleSignIn = nil }
+        if activePasskeyCeremonies == 0 { releaseCalmRipple() }
         AppleSignInBridge.shared.sheetDidClose(sheet.id)
         if sheet.mode == .popup {
             let c = sheet.tab.controller

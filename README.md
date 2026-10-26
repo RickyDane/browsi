@@ -206,8 +206,10 @@ Also:
 
 - **Liquid Glass & motion**: glass chrome, a morphing tab selection, a glowing progress bar and blur-scale
   transitions. Everything respects Reduce Motion.
-- **Wave impact**: clicking "Sign in with Apple" or a passkey button sends a ripple across the page from the
-  click (Metal shader). Toggle in Settings › Appearance.
+- **Native Cipher**: Apple sign-in and passkey buttons trigger one quick, shallow (10%) page impact from
+  the click. White cipher dots hold during authentication over a light 30% darkening layer, then fade
+  without a second ripple. The page rebounds immediately; Reduce Motion uses a simple neutral fade.
+  Toggle in Settings › Appearance.
 - **Settings**: a System-Settings-style window with about 40 options across General, Appearance, Tabs & Spaces,
   Privacy & Security, Passwords, Websites, Downloads and Advanced.
 

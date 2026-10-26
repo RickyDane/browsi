@@ -82,6 +82,9 @@ struct LoginImpactTests {
         while browser.calmRipple == nil, ContinuousClock.now < end { try? await Task.sleep(for: .milliseconds(30)) }
         let ripple = try #require(browser.calmRipple, "clicking Sign in with Apple must start the same wave as passkeys")
         #expect(abs(ripple.origin.x - 400) < 60 && abs(ripple.origin.y - 272) < 60, "origin \(ripple.origin)")
+        #expect(ripple.tabID == tab.id)
+        let pageOrigin = try #require(ripple.pageOrigin)
+        #expect(abs(pageOrigin.x - 400) < 60 && abs(pageOrigin.y - 272) < 60)
     }
 
     @Test func untrustedScriptClicksDoNothing() async throws {
@@ -143,9 +146,113 @@ struct LoginImpactTests {
         #expect(browser.calmRipple?.release != nil, "no passkey request → don't hold the grid")
     }
 
+    @Test func nativeCipherHoldsForAppleSheetAndFadesOnClose() async throws {
+        let window = makeWindow(); defer { window.orderOut(nil) }
+        let (browser, tab, webView) = try await loadPage("<p>login</p>", in: window)
+        browser.playCalmRipple(at: CGPoint(x: 100, y: 100), in: webView)
+        browser.appleSignIn = AppleSignInState(tab: tab, source: tab, mode: .inPlace)
+        try await Task.sleep(for: .seconds(CalmRipple.requestGrace + 0.2))
+        #expect(browser.calmRipple?.release == nil, "Apple sign-in keeps the same holding grid")
+        browser.endAppleSignIn()
+        #expect(browser.calmRipple?.release != nil)
+        try await Task.sleep(for: .seconds(CalmRipple.releaseDuration + 0.2))
+        #expect(browser.calmRipple == nil)
+    }
+
+    @Test func nativeCipherDoesNotStartForAnUnselectedWebView() async throws {
+        let window = makeWindow(); defer { window.orderOut(nil) }
+        let (browser, _, webView) = try await loadPage("<p>login</p>", in: window)
+        _ = browser.newTab(url: nil)
+        browser.playCalmRipple(at: .zero, in: webView)
+        #expect(browser.calmRipple == nil)
+    }
+
+    @Test func nativeCipherCapturesOnlyTheCurrentGenerationAndDiscardsItsSnapshot() async throws {
+        let window = makeWindow(); defer { window.orderOut(nil) }
+        let (browser, tab, webView) = try await loadPage("<h1>Snapshot fixture</h1>", in: window)
+        browser.passkeyCeremony(started: true)
+        defer { browser.passkeyCeremony(started: false) }
+        browser.playCalmRipple(at: CGPoint(x: 100, y: 100), in: webView)
+        browser.playCalmRipple(at: CGPoint(x: 300, y: 200), in: webView)
+        let ripple = try #require(browser.calmRipple)
+        let timeout = ContinuousClock.now + .seconds(1)
+        while browser.calmRipple?.snapshot == nil, ContinuousClock.now < timeout {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(browser.calmRipple?.id == ripple.id)
+        #expect(browser.calmRipple?.tabID == tab.id)
+        #expect(browser.calmRipple?.pageOrigin == CGPoint(x: 300, y: 200))
+        if !Motion.reduceMotion {
+            #expect(browser.calmRipple?.snapshot != nil)
+        }
+        let duration = NativeCipher.settlingDuration(origin: CGPoint(x: 300, y: 200), size: webView.bounds.size)
+        try await Task.sleep(for: .seconds(max(0, duration - Date().timeIntervalSince(ripple.start)) + 0.2))
+        #expect(browser.calmRipple?.snapshot == nil, "temporary page image must be discarded after the impact")
+        #expect(browser.calmRipple?.release == nil, "the grid can hold without retaining a snapshot")
+    }
+
+    @Test func nativeCipherWarpActuallyBendsPixelsAndRestoresThem() throws {
+        let size = CGSize(width: 160, height: 120)
+        func render(age: Double) throws -> NSBitmapImageRep {
+            let page = Canvas { context, bounds in
+                context.fill(Path(CGRect(origin: .zero, size: bounds)), with: .color(.black))
+                for x in stride(from: 0, to: 160, by: 8) {
+                    context.fill(Path(CGRect(x: x, y: 0, width: 3, height: 120)), with: .color(.white))
+                }
+            }
+            .frame(width: size.width, height: size.height)
+            .layerEffect(ShaderLibrary.default.browsiPasskeyWarp(
+                .float2(size), .float2(CGPoint(x: 30, y: 30)), .float(age),
+                .float(1e6), .float(0.75), .float(NativeCipher.depth)),
+                maxSampleOffset: CGSize(width: 18, height: 14))
+            let renderer = ImageRenderer(content: page)
+            renderer.scale = 1
+            return NSBitmapImageRep(cgImage: try #require(renderer.cgImage))
+        }
+        let before = try render(age: 0)
+        let during = try render(age: 1)
+        let after = try render(age: 10)
+        var bending = 0.0, remaining = 0.0
+        for y in 0..<120 {
+            for x in 0..<160 {
+                let a = try #require(before.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB))
+                let b = try #require(during.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB))
+                let c = try #require(after.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB))
+                bending += abs(a.redComponent - b.redComponent)
+                remaining += abs(a.redComponent - c.redComponent)
+            }
+        }
+        #expect(bending > 10, "a true page warp, not only a grid overlay")
+        #expect(remaining < 160 * 120 * 0.002, "the impact must not leave the page pushed down")
+    }
+
+    @Test func nativeCipherGridIsWhiteAndStillWhileHolding() throws {
+        let ripple = CalmRipple(origin: CGPoint(x: 20, y: 20))
+        func render(at t: Double) throws -> NSBitmapImageRep {
+            let renderer = ImageRenderer(content: CalmRippleFrame(ripple: ripple, t: t).frame(width: 120, height: 80))
+            renderer.scale = 1
+            return NSBitmapImageRep(cgImage: try #require(renderer.cgImage))
+        }
+        let first = try render(at: 4)
+        let later = try render(at: 5)
+        var whiteDots = 0
+        for y in 0..<80 {
+            for x in 0..<120 {
+                let a = try #require(first.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB))
+                let b = try #require(later.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB))
+                #expect(a == b, "holding grid must not flicker or breathe")
+                if a.alphaComponent > 0.5 {
+                    #expect(abs(a.redComponent - a.blueComponent) < 0.04, "white, not the space's accent color")
+                    whiteDots += 1
+                }
+            }
+        }
+        #expect(whiteDots > 0)
+    }
+
     @Test func instantAnswerStillShowsMinimumHold() async throws {
         let browser = BrowserState(library: LibraryStore(inMemory: true), restore: false)
-        browser.calmRipple = CalmRipple(origin: .zero, tint: .teal)
+        browser.calmRipple = CalmRipple(origin: .zero)
         // A real authenticator call (rejected at once: unknown type) must start and end the hold.
         _ = await PasskeyAuthenticator.handle(["type": "nope"], origin: WebOrigin(scheme: "https", host: "x.example", port: 443),
                                               sameOriginAsTop: true)
@@ -169,7 +276,7 @@ struct LoginImpactTests {
                 return m
             }
         }
-        var ripple = CalmRipple(origin: CGPoint(x: 20, y: 20), tint: .teal)
+        var ripple = CalmRipple(origin: CGPoint(x: 20, y: 20))
         let near = CGPoint(x: 60, y: 60), far = CGPoint(x: 580, y: 380)
         let holding = try alphaAt(ripple, t: 1.0, [near, far])
         #expect(holding[0] > 8, "grid covers the area the wave has passed")
@@ -183,5 +290,6 @@ struct LoginImpactTests {
         let device = try #require(MTLCreateSystemDefaultDevice())
         let library = try device.makeDefaultLibrary(bundle: Bundle(for: TabWebController.self))
         #expect(library.functionNames.contains("browsiPasskeyGrid"))
+        #expect(library.functionNames.contains("browsiPasskeyWarp"))
     }
 }

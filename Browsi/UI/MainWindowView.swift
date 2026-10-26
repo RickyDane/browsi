@@ -157,11 +157,6 @@ struct MainWindowView: View {
             }
         }
         .animation(Motion.bouncy, value: browser.downloadsButtonShown)
-        .overlay {
-            if let ripple = browser.calmRipple {
-                CalmRippleOverlay(ripple: ripple).id(ripple.id)
-            }
-        }
         .animation(Motion.bouncy, value: browser.downloadsVisible)
         .animation(Motion.snappy, value: browser.palette)
         .animation(Motion.snappy, value: browser.sidebarVisible)
@@ -236,6 +231,12 @@ private struct ContentCard: View {
         }
         // No implicit/explicit animation leaks into tab swaps (avoids the page "shifting in").
         .transaction { $0.animation = nil }
+        .overlay {
+            if let ripple = browser.calmRipple, ripple.tabID == tab?.id, tab?.isHome == false {
+                CalmRippleOverlay(ripple: ripple, origin: ripple.pageOrigin ?? ripple.origin)
+                    .id(ripple.id)
+            }
+        }
         .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(.primary.opacity(edgeToEdge ? 0 : 0.08)))
         .background { if !edgeToEdge { CardShadow(radius: radius) } }
